@@ -48,14 +48,20 @@ def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v):
 
 model_name = 'u2net' #'u2netp'
 
-data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
-tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
-tra_label_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'gt_aug' + os.sep)
+# data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
+# tra_image_dir = os.path.join('im_aug' + os.sep)
+# tra_label_dir = os.path.join('gt_aug' + os.sep)
+data_dir = "/Users/zhanghaining/JH/项目/JLD_imgprocess/train/"
+tra_image_dir = os.path.join('img' + os.sep)
+tra_label_dir = os.path.join('label' + os.sep)
+# tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
+# tra_label_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'gt_aug' + os.sep)
 
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), 'saved_models', model_name + os.sep)
+model_dir = os.path.join(os.getcwd(), 'saved_models_512', model_name + os.sep)
+print(f"Model directory: {model_dir}")
 
 epoch_num = 100000
 batch_size_train = 12
@@ -75,6 +81,7 @@ for img_path in tra_img_name_list:
 	for i in range(1,len(bbb)):
 		imidx = imidx + "." + bbb[i]
 
+	# tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + '_Segmentation' + label_ext)
 	tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + label_ext)
 
 print("---")
@@ -88,77 +95,109 @@ salobj_dataset = SalObjDataset(
     img_name_list=tra_img_name_list,
     lbl_name_list=tra_lbl_name_list,
     transform=transforms.Compose([
-        RescaleT(320),
-        RandomCrop(288),
+        RescaleT(512),
+        RandomCrop(460),
         ToTensorLab(flag=0)]))
-salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=1)
+salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=4)
 
 # ------- 3. define model --------
+# 检测可用的设备
+device = (
+    torch.device("mps") if torch.backends.mps.is_available()
+    else torch.device("cuda") if torch.cuda.is_available()
+    else torch.device("cpu")
+)
+print(f"Using device: {device}")
+
 # define the net
 if(model_name=='u2net'):
     net = U2NET(3, 1)
 elif(model_name=='u2netp'):
     net = U2NETP(3,1)
 
-if torch.cuda.is_available():
-    net.cuda()
+net.to(device)
 
 # ------- 4. define optimizer --------
 print("---define optimizer...")
 optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
 
 # ------- 5. training process --------
-print("---start training...")
-ite_num = 0
-running_loss = 0.0
-running_tar_loss = 0.0
-ite_num4val = 0
-save_frq = 2000 # save the model every 2000 iterations
+def train_model():
+    print("---start training...")
+    ite_num = 0
+    running_loss = 0.0
+    running_tar_loss = 0.0
+    ite_num4val = 0
+    save_frq = 1000 # save the model every 2000 iterations
 
-for epoch in range(0, epoch_num):
-    net.train()
+    for epoch in range(0, epoch_num):
+        net.train()
+        epoch_loss = 0.0
+        epoch_tar_loss = 0.0
+        batch_count = 0
 
-    for i, data in enumerate(salobj_dataloader):
-        ite_num = ite_num + 1
-        ite_num4val = ite_num4val + 1
+        for i, data in enumerate(salobj_dataloader):
+            ite_num = ite_num + 1
+            ite_num4val = ite_num4val + 1
 
-        inputs, labels = data['image'], data['label']
+            inputs, labels = data['image'], data['label']
 
-        inputs = inputs.type(torch.FloatTensor)
-        labels = labels.type(torch.FloatTensor)
+            inputs = inputs.type(torch.FloatTensor)
+            labels = labels.type(torch.FloatTensor)
 
-        # wrap them in Variable
-        if torch.cuda.is_available():
-            inputs_v, labels_v = Variable(inputs.cuda(), requires_grad=False), Variable(labels.cuda(),
-                                                                                        requires_grad=False)
-        else:
-            inputs_v, labels_v = Variable(inputs, requires_grad=False), Variable(labels, requires_grad=False)
+            # 将数据移动到对应设备
+            inputs_v = inputs.to(device)
+            labels_v = labels.to(device)
+            
+            # y zero the parameter gradients
+            optimizer.zero_grad()
 
-        # y zero the parameter gradients
-        optimizer.zero_grad()
+            # forward + backward + optimize
+            d0, d1, d2, d3, d4, d5, d6 = net(inputs_v)
+            loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
 
-        # forward + backward + optimize
-        d0, d1, d2, d3, d4, d5, d6 = net(inputs_v)
-        loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
+            loss.backward()
+            optimizer.step()
 
-        loss.backward()
-        optimizer.step()
+            # print statistics
+            running_loss += loss.data.item()
+            running_tar_loss += loss2.data.item()
 
-        # # print statistics
-        running_loss += loss.data.item()
-        running_tar_loss += loss2.data.item()
+            # 累加每个batch的loss用于计算epoch平均loss
+            epoch_loss += loss.data.item()
+            epoch_tar_loss += loss2.data.item()
+            batch_count += 1
 
-        # del temporary outputs and loss
-        del d0, d1, d2, d3, d4, d5, d6, loss2, loss
+            # del temporary outputs and loss
+            del d0, d1, d2, d3, d4, d5, d6, loss2, loss
 
-        print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f " % (
-        epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
+            print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f " % (
+            epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
 
-        if ite_num % save_frq == 0:
+            if ite_num % save_frq == 0:
+                torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
+                running_loss = 0.0
+                running_tar_loss = 0.0
+                net.train()  # resume train
+                ite_num4val = 0
+        
+        # 在每个epoch结束时计算平均loss
+        avg_epoch_loss = epoch_loss / batch_count
+        avg_epoch_tar_loss = epoch_tar_loss / batch_count
+        
+        # 每两个epoch保存一次模型
+        if (epoch + 1) % 2 == 0:
+            save_path = os.path.join(
+                model_dir, 
+                f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}.pth"
+            )
+            torch.save(net.state_dict(), save_path)
+            print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f}")
 
-            torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
-            running_loss = 0.0
-            running_tar_loss = 0.0
-            net.train()  # resume train
-            ite_num4val = 0
+if __name__ == '__main__':
+    # 确保模型保存目录存在
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+        
+    train_model()
 

@@ -55,12 +55,15 @@ def main():
 
     # --------- 1. get image path and name ---------
     model_name='u2net'#u2netp
+    # model_name = 'u2net_epoch_290_loss_0.1894'
 
 
 
-    image_dir = os.path.join(os.getcwd(), 'test_data', 'test_images')
+    # image_dir = os.path.join(os.getcwd(), 'test_data', 'test_images')
+    image_dir = '/Users/zhanghaining/2022/dataset/ISBI_2016/Test_Data'
     prediction_dir = os.path.join(os.getcwd(), 'test_data', model_name + '_results' + os.sep)
-    model_dir = os.path.join(os.getcwd(), 'saved_models', model_name, model_name + '.pth')
+    checkpointName = 'u2net_epoch_290_loss_0.1894'
+    model_dir = os.path.join(os.getcwd(), 'saved_models', model_name, checkpointName + '.pth')
 
     img_name_list = glob.glob(image_dir + os.sep + '*')
     print(img_name_list)
@@ -85,11 +88,17 @@ def main():
         print("...load U2NEP---4.7 MB")
         net = U2NETP(3,1)
 
-    if torch.cuda.is_available():
-        net.load_state_dict(torch.load(model_dir))
-        net.cuda()
-    else:
-        net.load_state_dict(torch.load(model_dir, map_location='cpu'))
+    # 检测可用的设备
+    device = (
+        torch.device("mps") if torch.backends.mps.is_available()
+        else torch.device("cuda") if torch.cuda.is_available()
+        else torch.device("cpu")
+    )
+    print(f"Using device: {device}")
+
+    # 加载模型权重
+    net.load_state_dict(torch.load(model_dir, map_location=device))
+    net.to(device)
     net.eval()
 
     # --------- 4. inference for each image ---------
@@ -99,24 +108,24 @@ def main():
 
         inputs_test = data_test['image']
         inputs_test = inputs_test.type(torch.FloatTensor)
+        
+        # 将输入数据移动到对应设备
+        inputs_test = inputs_test.to(device)
 
-        if torch.cuda.is_available():
-            inputs_test = Variable(inputs_test.cuda())
-        else:
-            inputs_test = Variable(inputs_test)
+        # 使用 with torch.no_grad() 来提高推理效率
+        with torch.no_grad():
+            d1,d2,d3,d4,d5,d6,d7= net(inputs_test)
 
-        d1,d2,d3,d4,d5,d6,d7= net(inputs_test)
+            # normalization
+            pred = d1[:,0,:,:]
+            pred = normPRED(pred)
 
-        # normalization
-        pred = d1[:,0,:,:]
-        pred = normPRED(pred)
+            # save results to test_results folder
+            if not os.path.exists(prediction_dir):
+                os.makedirs(prediction_dir, exist_ok=True)
+            save_output(img_name_list[i_test],pred,prediction_dir)
 
-        # save results to test_results folder
-        if not os.path.exists(prediction_dir):
-            os.makedirs(prediction_dir, exist_ok=True)
-        save_output(img_name_list[i_test],pred,prediction_dir)
-
-        del d1,d2,d3,d4,d5,d6,d7
+            del d1,d2,d3,d4,d5,d6,d7
 
 if __name__ == "__main__":
     main()
