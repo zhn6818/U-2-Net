@@ -2,3 +2,5 @@
 /saved_models_
 /test_data
 /train_data
+*.pth
+*.log

@@ -51,7 +51,7 @@ model_name = 'u2net' #'u2netp'
 # data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
 # tra_image_dir = os.path.join('im_aug' + os.sep)
 # tra_label_dir = os.path.join('gt_aug' + os.sep)
-data_dir = "/Users/zhanghaining/JH/项目/JLD_imgprocess/train/"
+data_dir = "/Users/zhanghaining/JH/项目/daizhuang_imgprocess/train/"
 tra_image_dir = os.path.join('img' + os.sep)
 tra_label_dir = os.path.join('label' + os.sep)
 # tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
@@ -60,11 +60,11 @@ tra_label_dir = os.path.join('label' + os.sep)
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), 'saved_models_512', model_name + os.sep)
+model_dir = os.path.join(os.getcwd(), 'daizhuang_saved_models_512', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
 epoch_num = 100000
-batch_size_train = 12
+batch_size_train = 4
 batch_size_val = 1
 train_num = 0
 val_num = 0
