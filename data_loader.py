@@ -218,7 +218,11 @@ class ToTensorLab(object):
 		tmpImg = tmpImg.transpose((2, 0, 1))
 		tmpLbl = label.transpose((2, 0, 1))
 
-		return {'imidx':torch.from_numpy(imidx), 'image': torch.from_numpy(tmpImg), 'label': torch.from_numpy(tmpLbl)}
+		return {
+			'imidx': torch.from_numpy(imidx.copy()).long(),
+			'image': torch.from_numpy(tmpImg.copy()).float(),
+			'label': torch.from_numpy(tmpLbl.copy()).float()
+		}
 
 class SalObjDataset(Dataset):
 	def __init__(self,img_name_list,lbl_name_list,transform=None):
