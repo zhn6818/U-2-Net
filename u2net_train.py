@@ -51,7 +51,7 @@ model_name = 'u2net' #'u2netp'
 # data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
 # tra_image_dir = os.path.join('im_aug' + os.sep)
 # tra_label_dir = os.path.join('gt_aug' + os.sep)
-data_dir = "/Users/zhanghaining/JH/项目/daizhuang_imgprocess/train/"
+data_dir = "/Users/zhanghaining/JH/projects/daizhuang_imgprocess/trainData/"
 tra_image_dir = os.path.join('img' + os.sep)
 tra_label_dir = os.path.join('label' + os.sep)
 # tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
@@ -60,11 +60,11 @@ tra_label_dir = os.path.join('label' + os.sep)
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), 'daizhuang_saved_models_512', model_name + os.sep)
+model_dir = os.path.join(os.getcwd(), 'daizhuang_combine_saved_models_512', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
 epoch_num = 100000
-batch_size_train = 4
+batch_size_train = 16
 batch_size_val = 1
 train_num = 0
 val_num = 0
@@ -128,7 +128,7 @@ def train_model():
     running_loss = 0.0
     running_tar_loss = 0.0
     ite_num4val = 0
-    save_frq = 1000 # save the model every 2000 iterations
+    save_frq = 2000 # save the model every 2000 iterations
 
     for epoch in range(0, epoch_num):
         net.train()
@@ -186,7 +186,7 @@ def train_model():
         avg_epoch_tar_loss = epoch_tar_loss / batch_count
         
         # 每两个epoch保存一次模型
-        if (epoch + 1) % 2 == 0:
+        if (epoch + 1) % 5 == 0:
             save_path = os.path.join(
                 model_dir, 
                 f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}.pth"
