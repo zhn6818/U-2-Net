@@ -151,10 +151,31 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 )
 
 # ------- 5. training process --------
+def calculate_accuracy(pred, gt, threshold=0.1):
+    """计算准确率
+    Args:
+        pred: 预测结果 tensor
+        gt: ground truth tensor
+        threshold: 二值化阈值
+    Returns:
+        accuracy: 准确率
+    """
+    # 将预测结果二值化
+    pred_binary = (pred > threshold).float()
+    gt_binary = (gt > 0.5).float()  # GT通常已经是二值的
+    
+    # 计算准确率
+    correct = (pred_binary == gt_binary).float().sum()
+    total = gt_binary.numel()
+    
+    return (correct / total).item()
+
 def validate(net, val_loader, device):
     net.eval()
     total_loss = 0
-    total_edge_loss = 0
+    total_acc = 0
+    batch_count = 0
+    
     with torch.no_grad():
         for data in val_loader:
             inputs, labels = data['image'], data['label']
@@ -163,25 +184,31 @@ def validate(net, val_loader, device):
             
             d0, d1, d2, d3, d4, d5, d6 = net(inputs)
             loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels)
-            edge_loss_val = edge_loss(d0, labels)
+            
+            # 计算准确率
+            accuracy = calculate_accuracy(d0, labels)
             
             total_loss += loss.item()
-            total_edge_loss += edge_loss_val.item()
+            total_acc += accuracy
+            batch_count += 1
             
-    return total_loss / len(val_loader), total_edge_loss / len(val_loader)
+    return total_loss / batch_count, total_acc / batch_count
 
 def train_model():
     print("---start training...")
     ite_num = 0
     running_loss = 0.0
     running_tar_loss = 0.0
+    running_acc = 0.0  # 添加准确率统计
     ite_num4val = 0
-    save_frq = 2000 # save the model every 2000 iterations
-
+    save_frq = 2000
+    best_acc = 0.0  # 记录最佳准确率
+    
     for epoch in range(0, epoch_num):
         net.train()
         epoch_loss = 0.0
         epoch_tar_loss = 0.0
+        epoch_acc = 0.0  # 添加epoch准确率统计
         batch_count = 0
 
         for i, data in enumerate(salobj_dataloader):
@@ -189,65 +216,76 @@ def train_model():
             ite_num4val = ite_num4val + 1
 
             inputs, labels = data['image'], data['label']
-
             inputs = inputs.type(torch.FloatTensor)
             labels = labels.type(torch.FloatTensor)
 
-            # 将数据移动到对应设备
             inputs_v = inputs.to(device)
             labels_v = labels.to(device)
             
-            # y zero the parameter gradients
             optimizer.zero_grad()
 
-            # forward + backward + optimize
             d0, d1, d2, d3, d4, d5, d6 = net(inputs_v)
             loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
+            
+            # 计算准确率
+            accuracy = calculate_accuracy(d0, labels_v)
 
             loss.backward()
             optimizer.step()
 
-            # print statistics
+            # 更新统计信息
             running_loss += loss.data.item()
             running_tar_loss += loss2.data.item()
-
-            # 累加每个batch的loss用于计算epoch平均loss
+            running_acc += accuracy
+            
             epoch_loss += loss.data.item()
             epoch_tar_loss += loss2.data.item()
+            epoch_acc += accuracy
             batch_count += 1
 
-            # del temporary outputs and loss
-            del d0, d1, d2, d3, d4, d5, d6, loss2, loss
-
-            print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f " % (
-            epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
+            print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, acc: %3f" % (
+                epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, 
+                running_loss / ite_num4val, running_tar_loss / ite_num4val, 
+                running_acc / ite_num4val))
 
             if ite_num % save_frq == 0:
-                torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
+                # 验证集评估
+                val_loss, val_acc = validate(net, salobj_dataloader, device)
+                print(f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_acc:.4f}")
+                
+                # 只有当验证集准确率提升时才保存模型
+                if val_acc > best_acc:
+                    best_acc = val_acc
+                    torch.save(net.state_dict(), model_dir + model_name + 
+                             f"_bce_itr_{ite_num}_train_{running_loss/ite_num4val:.3f}_tar_{running_tar_loss/ite_num4val:.3f}_acc_{val_acc:.3f}.pth")
+                    print(f"Model saved with new best accuracy: {val_acc:.4f}")
+                
                 running_loss = 0.0
                 running_tar_loss = 0.0
-                net.train()  # resume train
+                running_acc = 0.0
+                net.train()
                 ite_num4val = 0
-        
-        # 在每个epoch结束时计算平均loss
+
+        # 计算epoch平均值
         avg_epoch_loss = epoch_loss / batch_count
-        avg_epoch_tar_loss = epoch_tar_loss / batch_count
+        avg_epoch_acc = epoch_acc / batch_count
         
-        # 每两个epoch保存一次模型
+        # 每5个epoch评估一次，只有准确率提升时才保存
         if (epoch + 1) % 5 == 0:
-            save_path = os.path.join(
-                model_dir, 
-                f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}.pth"
-            )
-            torch.save(net.state_dict(), save_path)
-            print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f}")
+            val_loss, val_acc = validate(net, salobj_dataloader, device)
+            print(f"Epoch {epoch+1} Validation - Loss: {val_loss:.4f}, Accuracy: {val_acc:.4f}")
+            
+            if val_acc > best_acc:
+                best_acc = val_acc
+                save_path = os.path.join(
+                    model_dir, 
+                    f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}_acc_{val_acc:.4f}.pth"
+                )
+                torch.save(net.state_dict(), save_path)
+                print(f"Model saved at epoch {epoch+1} with new best accuracy: {val_acc:.4f}")
 
-        # 在每个epoch结束时更新学习率
+        # 更新学习率
         scheduler.step(avg_epoch_loss)
-
-        # 验证阶段
-        val_loss, val_edge_loss = validate(net, salobj_dataloader, device)
-        print(f"Validation Loss: {val_loss:.4f}, Edge Loss: {val_edge_loss:.4f}")
 
 if __name__ == '__main__':
     # 确保模型保存目录存在
