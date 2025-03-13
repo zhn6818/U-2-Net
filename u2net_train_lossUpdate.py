@@ -84,7 +84,7 @@ model_dir = os.path.join(os.getcwd(), 'daizhuang_combine_saved_models_512', mode
 print(f"Model directory: {model_dir}")
 
 epoch_num = 100000
-batch_size_train = 16
+batch_size_train = 2
 batch_size_val = 1
 train_num = 0
 val_num = 0
@@ -115,10 +115,9 @@ salobj_dataset = SalObjDataset(
     img_name_list=tra_img_name_list,
     lbl_name_list=tra_lbl_name_list,
     transform=transforms.Compose([
-        RescaleT(512),
-        RandomCrop(460),
+        RescaleT(512),  # 直接缩放到目标尺寸
         ToTensorLab(flag=0)]))
-salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=4)
+salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=2)
 
 # ------- 3. define model --------
 # 检测可用的设备
@@ -139,14 +138,15 @@ net.to(device)
 
 # ------- 4. define optimizer --------
 print("---define optimizer...")
-optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+# 提高初始学习率
+optimizer = optim.Adam(net.parameters(), lr=0.003, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-4)
 
-# 在定义优化器后添加学习率调度器
+# 添加学习率调度器
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     optimizer, 
-    mode='min',
-    factor=0.5,
-    patience=5,
+    mode='max',  # 根据准确率来调整学习率
+    factor=0.5,  # 学习率调整因子
+    patience=3,  # 当3个epoch准确率没有提升时降低学习率
     verbose=True
 )
 
@@ -199,7 +199,7 @@ def train_model():
     ite_num = 0
     running_loss = 0.0
     running_tar_loss = 0.0
-    running_acc = 0.0  # 添加准确率统计
+    running_acc = 0.0
     ite_num4val = 0
     save_frq = 2000
     best_acc = 0.0  # 记录最佳准确率
@@ -208,7 +208,7 @@ def train_model():
         net.train()
         epoch_loss = 0.0
         epoch_tar_loss = 0.0
-        epoch_acc = 0.0  # 添加epoch准确率统计
+        epoch_acc = 0.0
         batch_count = 0
 
         for i, data in enumerate(salobj_dataloader):
@@ -227,11 +227,18 @@ def train_model():
             d0, d1, d2, d3, d4, d5, d6 = net(inputs_v)
             loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
             
-            # 计算准确率
+            # 计算当前batch的准确率
             accuracy = calculate_accuracy(d0, labels_v)
-
-            loss.backward()
-            optimizer.step()
+            
+            # 如果准确率提升，立即保存模型
+            if accuracy > best_acc:
+                best_acc = accuracy
+                save_path = os.path.join(
+                    model_dir, 
+                    f"{model_name}_acc_{accuracy:.4f}.pth"
+                )
+                torch.save(net.state_dict(), save_path)
+                print(f"New best accuracy: {accuracy:.4f}, model saved to {save_path}")
 
             # 更新统计信息
             running_loss += loss.data.item()
@@ -253,7 +260,7 @@ def train_model():
                 val_loss, val_acc = validate(net, salobj_dataloader, device)
                 print(f"Validation Loss: {val_loss:.4f}, Validation Accuracy: {val_acc:.4f}")
                 
-                # 只有当验证集准确率提升时才保存模型
+                # 如果验证集准确率提升，保存模型
                 if val_acc > best_acc:
                     best_acc = val_acc
                     torch.save(net.state_dict(), model_dir + model_name + 
@@ -266,26 +273,8 @@ def train_model():
                 net.train()
                 ite_num4val = 0
 
-        # 计算epoch平均值
-        avg_epoch_loss = epoch_loss / batch_count
-        avg_epoch_acc = epoch_acc / batch_count
-        
-        # 每5个epoch评估一次，只有准确率提升时才保存
-        if (epoch + 1) % 5 == 0:
-            val_loss, val_acc = validate(net, salobj_dataloader, device)
-            print(f"Epoch {epoch+1} Validation - Loss: {val_loss:.4f}, Accuracy: {val_acc:.4f}")
-            
-            if val_acc > best_acc:
-                best_acc = val_acc
-                save_path = os.path.join(
-                    model_dir, 
-                    f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}_acc_{val_acc:.4f}.pth"
-                )
-                torch.save(net.state_dict(), save_path)
-                print(f"Model saved at epoch {epoch+1} with new best accuracy: {val_acc:.4f}")
-
         # 更新学习率
-        scheduler.step(avg_epoch_loss)
+        scheduler.step(epoch_loss / batch_count)
 
 if __name__ == '__main__':
     # 确保模型保存目录存在
