@@ -4,3 +4,4 @@
 /train_data
 *.pth
 *.log
+train_data/
