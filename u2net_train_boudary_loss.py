@@ -169,17 +169,19 @@ tra_label_dir = os.path.join('gt_aug' + os.sep)
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), '317_saved_models_512', model_name + os.sep)
+# 修改模型保存目录为finetune_models
+model_dir = os.path.join(os.getcwd(), 'finetune_models', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
-# 添加预训练模型路径
-pretrained_model_path = os.path.join(os.getcwd(), '317_saved_models_512', model_name, 'u2net_epoch_695_loss_1.7671.pth')
-# 从预训练模型文件名中提取起始epoch
-start_epoch = 695  # 从文件名中提取的epoch数
+# 修改为使用saved_models中的预训练模型
+pretrained_model_path = os.path.join(os.getcwd(), 'saved_models', 'u2net.pth')
+# 设置起始epoch为0，因为我们要重新开始微调训练
+start_epoch = 0  
 print(f"Pretrained model: {pretrained_model_path}")
 print(f"Starting from epoch: {start_epoch}")
 
-epoch_num = 100000
+# 减少总训练epoch数量，因为是微调
+epoch_num = 100
 batch_size_train = 2
 batch_size_val = 1
 train_num = 0
@@ -244,12 +246,12 @@ net.to(device)
 
 # ------- 4. define optimizer --------
 print("---define optimizer...")
-optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+# 降低学习率，使用小学习率进行微调
+optimizer = optim.Adam(net.parameters(), lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0001)
 
-# 添加学习率调度器，基于验证准确率调整学习率
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, mode='max', factor=0.5, patience=5, 
-    verbose=True, threshold=0.001, threshold_mode='rel'
+# 添加学习率调度器，使用余弦退火策略，适合微调阶段
+scheduler = optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=epoch_num, eta_min=1e-6
 )
 
 # ------- 5. training process --------
@@ -261,11 +263,12 @@ def train_model(boundary_weight=0.5):
     running_tar_loss = 0.0
     running_boundary_loss = 0.0
     ite_num4val = 0
-    save_frq = 2000 # save the model every 2000 iterations
+    save_frq = 500 # 更频繁地保存模型，因为微调阶段每个更新都很重要
     
     # 添加最佳准确率和IOU跟踪
     best_accuracy = 0.0
     best_iou = 0.0
+    best_loss = float('inf')
 
     for epoch in range(start_epoch, epoch_num):  # 从start_epoch开始训练
         net.train()
@@ -274,6 +277,10 @@ def train_model(boundary_weight=0.5):
         epoch_accuracy = 0.0
         epoch_iou = 0.0
         batch_count = 0
+
+        # 获取当前学习率
+        current_lr = optimizer.param_groups[0]['lr']
+        print(f"Current learning rate: {current_lr}")
 
         for i, data in enumerate(salobj_dataloader):
             ite_num = ite_num + 1
@@ -304,6 +311,8 @@ def train_model(boundary_weight=0.5):
             epoch_iou += batch_iou
 
             loss.backward()
+            # 添加梯度裁剪，防止微调过程中梯度爆炸
+            torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
             optimizer.step()
 
             # print statistics
@@ -323,7 +332,7 @@ def train_model(boundary_weight=0.5):
             running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy, batch_iou))
 
             if ite_num % save_frq == 0:
-                torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
+                torch.save(net.state_dict(), model_dir + model_name+"_finetune_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
                 running_loss = 0.0
                 running_tar_loss = 0.0
                 net.train()  # resume train
@@ -341,23 +350,32 @@ def train_model(boundary_weight=0.5):
         print(f"Average IOU: {avg_epoch_iou:.4f}")
         
         # 更新学习率
-        scheduler.step(avg_epoch_accuracy)
+        scheduler.step()
         
-        # 每5个epoch保存一次模型
-        if (epoch + 1) % 5 == 0:
+        # 每个epoch保存一次模型，对于微调来说每个epoch都很重要
+        save_path = os.path.join(
+            model_dir, 
+            f"{model_name}_finetune_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}_acc_{avg_epoch_accuracy:.4f}_iou_{avg_epoch_iou:.4f}.pth"
+        )
+        torch.save(net.state_dict(), save_path)
+        print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f}, accuracy {avg_epoch_accuracy:.4f}, and IOU {avg_epoch_iou:.4f}")
+        
+        # 如果损失低于最佳损失，保存最佳模型
+        if avg_epoch_loss < best_loss:
+            best_loss = avg_epoch_loss
             save_path = os.path.join(
                 model_dir, 
-                f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}_acc_{avg_epoch_accuracy:.4f}_iou_{avg_epoch_iou:.4f}.pth"
+                f"{model_name}_finetune_best_loss_{best_loss:.4f}_epoch_{epoch+1}.pth"
             )
             torch.save(net.state_dict(), save_path)
-            print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f}, accuracy {avg_epoch_accuracy:.4f}, and IOU {avg_epoch_iou:.4f}")
+            print(f"New best loss achieved! Model saved with loss: {best_loss:.4f}")
         
         # 如果准确率提高了，保存最佳模型
         if avg_epoch_accuracy > best_accuracy:
             best_accuracy = avg_epoch_accuracy
             save_path = os.path.join(
                 model_dir, 
-                f"{model_name}_best_acc_{best_accuracy:.4f}_epoch_{epoch+1}.pth"
+                f"{model_name}_finetune_best_acc_{best_accuracy:.4f}_epoch_{epoch+1}.pth"
             )
             torch.save(net.state_dict(), save_path)
             print(f"New best accuracy achieved! Model saved with accuracy: {best_accuracy:.4f}")
@@ -367,7 +385,7 @@ def train_model(boundary_weight=0.5):
             best_iou = avg_epoch_iou
             save_path = os.path.join(
                 model_dir, 
-                f"{model_name}_best_iou_{best_iou:.4f}_epoch_{epoch+1}.pth"
+                f"{model_name}_finetune_best_iou_{best_iou:.4f}_epoch_{epoch+1}.pth"
             )
             torch.save(net.state_dict(), save_path)
             print(f"New best IOU achieved! Model saved with IOU: {best_iou:.4f}")
@@ -377,9 +395,9 @@ if __name__ == '__main__':
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
         
-    # 设置边界损失的权重，您可以根据任务需要调整这个值
-    # 较大的值会让模型更关注边界，但可能影响整体分割
-    boundary_weight = 0.8  
+    # 设置边界损失的权重，对于微调可以使用较小的权重
+    # 较小的值可以保证模型在微调时不会过分关注边界而忽略整体
+    boundary_weight = 0.3  
     
     train_model(boundary_weight=boundary_weight)
 
