@@ -43,6 +43,22 @@ def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v):
 
 	return loss0, loss
 
+# 添加计算准确率的函数
+def calculate_accuracy(pred, target, threshold=0.5):
+    """
+    计算预测的准确率
+    Args:
+        pred: 预测的输出 (已经经过sigmoid)
+        target: 真实标签
+        threshold: 二值化阈值
+    Returns:
+        accuracy: 准确率
+    """
+    pred = (pred > threshold).float()
+    target = (target > threshold).float()
+    correct = (pred == target).float().sum()
+    total = target.numel()
+    return (correct / total).item()
 
 # ------- 2. set the directory of training dataset --------
 
@@ -51,20 +67,27 @@ model_name = 'u2net' #'u2netp'
 # data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
 # tra_image_dir = os.path.join('im_aug' + os.sep)
 # tra_label_dir = os.path.join('gt_aug' + os.sep)
-data_dir = "/Users/zhanghaining/JH/projects/daizhuang_imgprocess/trainData/"
-tra_image_dir = os.path.join('img' + os.sep)
-tra_label_dir = os.path.join('label' + os.sep)
+data_dir = "U2net_data/train_data/"
+tra_image_dir = os.path.join('im_aug' + os.sep)
+tra_label_dir = os.path.join('gt_aug' + os.sep)
 # tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
 # tra_label_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'gt_aug' + os.sep)
 
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), 'daizhuang_combine_saved_models_512', model_name + os.sep)
+model_dir = os.path.join(os.getcwd(), '317_saved_models_512', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
+# 添加预训练模型路径
+pretrained_model_path = os.path.join(os.getcwd(), '317_saved_models_512', model_name, 'u2net_epoch_695_loss_1.7671.pth')
+# 从预训练模型文件名中提取起始epoch
+start_epoch = 695  # 从文件名中提取的epoch数
+print(f"Pretrained model: {pretrained_model_path}")
+print(f"Starting from epoch: {start_epoch}")
+
 epoch_num = 100000
-batch_size_train = 16
+batch_size_train = 2
 batch_size_val = 1
 train_num = 0
 val_num = 0
@@ -115,6 +138,15 @@ if(model_name=='u2net'):
 elif(model_name=='u2netp'):
     net = U2NETP(3,1)
 
+# 加载预训练模型
+if os.path.exists(pretrained_model_path):
+    print(f"Loading pretrained model from {pretrained_model_path}")
+    net.load_state_dict(torch.load(pretrained_model_path, map_location=device))
+    print("Pretrained model loaded successfully!")
+else:
+    print(f"Pretrained model not found at {pretrained_model_path}, starting from scratch")
+    start_epoch = 0
+
 net.to(device)
 
 # ------- 4. define optimizer --------
@@ -129,11 +161,15 @@ def train_model():
     running_tar_loss = 0.0
     ite_num4val = 0
     save_frq = 2000 # save the model every 2000 iterations
+    
+    # 添加最佳准确率跟踪
+    best_accuracy = 0.0
 
-    for epoch in range(0, epoch_num):
+    for epoch in range(start_epoch, epoch_num):  # 从start_epoch开始训练
         net.train()
         epoch_loss = 0.0
         epoch_tar_loss = 0.0
+        epoch_accuracy = 0.0
         batch_count = 0
 
         for i, data in enumerate(salobj_dataloader):
@@ -155,6 +191,10 @@ def train_model():
             # forward + backward + optimize
             d0, d1, d2, d3, d4, d5, d6 = net(inputs_v)
             loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
+            
+            # 计算当前batch的准确率（使用d0作为最终输出）
+            batch_accuracy = calculate_accuracy(d0, labels_v)
+            epoch_accuracy += batch_accuracy
 
             loss.backward()
             optimizer.step()
@@ -171,8 +211,9 @@ def train_model():
             # del temporary outputs and loss
             del d0, d1, d2, d3, d4, d5, d6, loss2, loss
 
-            print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f " % (
-            epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
+            print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f " % (
+            epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, 
+            running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy))
 
             if ite_num % save_frq == 0:
                 torch.save(net.state_dict(), model_dir + model_name+"_bce_itr_%d_train_%3f_tar_%3f.pth" % (ite_num, running_loss / ite_num4val, running_tar_loss / ite_num4val))
@@ -181,18 +222,36 @@ def train_model():
                 net.train()  # resume train
                 ite_num4val = 0
         
-        # 在每个epoch结束时计算平均loss
+        # 在每个epoch结束时计算平均loss和准确率
         avg_epoch_loss = epoch_loss / batch_count
         avg_epoch_tar_loss = epoch_tar_loss / batch_count
+        avg_epoch_accuracy = epoch_accuracy / batch_count
         
-        # 每两个epoch保存一次模型
+        print(f"Epoch {epoch+1} Summary:")
+        print(f"Average Loss: {avg_epoch_loss:.4f}")
+        print(f"Average Accuracy: {avg_epoch_accuracy:.4f}")
+        
+        # # 更新学习率
+        # scheduler.step(avg_epoch_accuracy)
+        
+        # 每5个epoch保存一次模型
         if (epoch + 1) % 5 == 0:
             save_path = os.path.join(
                 model_dir, 
-                f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}.pth"
+                f"{model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}_acc_{avg_epoch_accuracy:.4f}.pth"
             )
             torch.save(net.state_dict(), save_path)
-            print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f}")
+            print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f} and accuracy {avg_epoch_accuracy:.4f}")
+        
+        # 如果准确率提高了，保存最佳模型
+        if avg_epoch_accuracy > best_accuracy:
+            best_accuracy = avg_epoch_accuracy
+            save_path = os.path.join(
+                model_dir, 
+                f"{model_name}_best_acc_{best_accuracy:.4f}_epoch_{epoch+1}.pth"
+            )
+            torch.save(net.state_dict(), save_path)
+            print(f"New best accuracy achieved! Model saved with accuracy: {best_accuracy:.4f}")
 
 if __name__ == '__main__':
     # 确保模型保存目录存在
