@@ -13,6 +13,7 @@ import torchvision.transforms as standard_transforms
 import numpy as np
 import glob
 import os
+from skimage import io, transform, color
 
 from data_loader import Rescale
 from data_loader import RescaleT
@@ -157,7 +158,7 @@ class ClassifierHead(nn.Module):
 
 # --------- 带分类头的U2NET模型 ---------
 class U2NetWithClassifier(nn.Module):
-    def __init__(self, n_classes=3, pretrained_path=None, freeze_backbone=False):
+    def __init__(self, n_classes=3, pretrained_path=None, freeze_backbone=False, eval_backbone=True):
         """
         初始化分类器扩展的U2NET模型
         
@@ -165,6 +166,7 @@ class U2NetWithClassifier(nn.Module):
             n_classes: 分类类别数
             pretrained_path: 预训练模型路径
             freeze_backbone: 是否冻结U2NET主干网络
+            eval_backbone: 是否始终将主干网络保持在评估模式
         """
         super(U2NetWithClassifier, self).__init__()
         
@@ -173,6 +175,9 @@ class U2NetWithClassifier(nn.Module):
         
         # 分类头 - 将使用多个U2NET中间层特征
         self.classifier = ClassifierHead(n_classes=n_classes)
+        
+        # 是否保持主干网络在评估模式
+        self.eval_backbone = eval_backbone
         
         # 加载预训练权重
         if pretrained_path and os.path.exists(pretrained_path):
@@ -184,10 +189,38 @@ class U2NetWithClassifier(nn.Module):
             print(f"U2NET主干网络已冻结，只有分类头参数可训练")
     
     def _freeze_backbone(self):
-        """冻结U2NET主干网络参数"""
+        """冻结U2NET主干网络参数和BatchNorm统计值"""
+        # 冻结所有参数
         for name, param in self.named_parameters():
             if 'u2net' in name:
                 param.requires_grad = False
+        
+        # 冻结BatchNorm层统计值
+        for name, module in self.u2net.named_modules():
+            if isinstance(module, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                module.eval()  # 设置为评估模式，不更新running统计量
+                module.weight.requires_grad = False
+                module.bias.requires_grad = False
+    
+    def train(self, mode=True):
+        """重写train方法，确保在训练模式下主干网络仍然可以保持评估模式"""
+        if mode:
+            # 设置整个模型为训练模式
+            super(U2NetWithClassifier, self).train(mode)
+            
+            # 如果设置了eval_backbone，则将主干网络设为评估模式
+            if self.eval_backbone:
+                self.u2net.eval()
+                
+                # # 确保BatchNorm层仍处于评估模式
+                # for m in self.u2net.modules():
+                #     if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                #         m.eval()
+        else:
+            # 设置整个模型为评估模式
+            super(U2NetWithClassifier, self).train(mode)
+        
+        return self
     
     def _load_pretrained_weights(self, pretrained_path):
         """加载预训练权重并处理兼容性问题"""
@@ -228,9 +261,33 @@ class U2NetWithClassifier(nn.Module):
                 # 注意：这里改变加载策略，先尝试直接加载到u2net子模块
                 try:
                     print("尝试直接加载权重到u2net子模块")
-                    self.u2net.load_state_dict(state_dict, strict=False)
-                    load_success = True
-                    print("成功直接加载到u2net子模块")
+                    
+                    # 临时将u2net设置为eval模式，确保加载后的统计值被正确应用
+                    self.u2net.eval()
+                    
+                    # 直接加载到u2net
+                    load_result = self.u2net.load_state_dict(state_dict, strict=False)
+                    
+                    # 打印哪些参数没有被加载
+                    if load_result.missing_keys:
+                        print(f"警告: 以下参数未在预训练权重中找到:")
+                        print(f"缺失参数数量: {len(load_result.missing_keys)}")
+                        if len(load_result.missing_keys) < 10:
+                            print(f"缺失参数: {load_result.missing_keys}")
+                            
+                    if load_result.unexpected_keys:
+                        print(f"信息: 以下预训练权重参数未在模型中使用:")
+                        print(f"未使用参数数量: {len(load_result.unexpected_keys)}")
+                        if len(load_result.unexpected_keys) < 10:
+                            print(f"未使用参数: {load_result.unexpected_keys}")
+                    
+                    # 如果缺失或多余的参数不多，则视为成功
+                    if len(load_result.missing_keys) < len(u2net_keys) * 0.2:  # 少于20%的参数缺失
+                        load_success = True
+                        print("成功直接加载到u2net子模块")
+                    else:
+                        load_success = False
+                        print(f"直接加载到u2net子模块部分成功，但缺失较多参数({len(load_result.missing_keys)}个)")
                 except Exception as e:
                     print(f"直接加载到u2net子模块失败: {e}")
                     load_success = False
@@ -240,10 +297,21 @@ class U2NetWithClassifier(nn.Module):
                     try:
                         print("尝试添加'u2net.'前缀后加载")
                         u2net_state_dict = {"u2net." + k: v for k, v in state_dict.items()}
-                        self.load_state_dict(u2net_state_dict, strict=False)
-                        print("成功通过添加前缀方式加载")
+                        
+                        # 加载整个模型
+                        load_result = self.load_state_dict(u2net_state_dict, strict=False)
+                        
+                        # 判断加载结果
+                        if len(load_result.missing_keys) < len(list(self.named_parameters())) * 0.3:
+                            print("成功通过添加前缀方式加载")
+                            load_success = True
+                        else:
+                            print(f"添加前缀加载部分成功，但缺失较多参数")
+                            load_success = False
                     except Exception as e:
                         print(f"添加前缀加载失败: {e}")
+                        load_success = False
+                        
                         # 最后尝试：检查权重格式，进行更智能的名称映射
                         try:
                             print("尝试更智能的参数名称映射...")
@@ -269,17 +337,31 @@ class U2NetWithClassifier(nn.Module):
                                 # 加载映射后的权重
                                 missing, unexpected = self.u2net.load_state_dict(mapped_state_dict, strict=False)
                                 print(f"智能映射加载完成。未映射参数: {len(missing)}, 多余参数: {len(unexpected)}")
+                                load_success = len(missing) < len(u2net_keys) * 0.3
                             else:
                                 print("未找到参数映射，使用随机初始化")
+                                load_success = False
                         except Exception as e:
                             print(f"智能映射失败: {e}")
+                            load_success = False
                 
-                # 验证加载后的参数
-                for name, param in self.u2net.named_parameters():
-                    if 'weight' in name and param.requires_grad:
-                        std = param.std().item()
-                        if std < 1e-6 or std > 1.0:
-                            print(f"警告: 参数 {name} 可能未正确初始化，标准差为 {std}")
+                # 加载完成后，验证参数是否正确初始化
+                if load_success:
+                    # 检查权重参数的标准差
+                    abnormal_params = []
+                    for name, param in self.u2net.named_parameters():
+                        if 'weight' in name and not 'norm' in name:  # 排除norm层的weight
+                            std = param.std().item()
+                            if std < 1e-6 or std > 1.0:
+                                abnormal_params.append((name, std))
+                    
+                    if abnormal_params:
+                        print(f"警告: 检测到 {len(abnormal_params)} 个参数可能未正确初始化")
+                        if len(abnormal_params) < 5:
+                            for name, std in abnormal_params:
+                                print(f"参数 {name} 标准差为 {std:.6f}")
+                    else:
+                        print("所有主干网络参数标准差正常，权重加载成功")
                 
             print(f"成功加载权重到设备: {device}")
         except Exception as e:
@@ -299,15 +381,23 @@ class U2NetWithClassifier(nn.Module):
                     
                     # 尝试直接加载到u2net子模块
                     try:
-                        self.u2net.load_state_dict(state_dict, strict=False)
-                        print("成功通过直接加载到u2net子模块")
+                        # 先将u2net设为eval模式
+                        self.u2net.eval()
+                        load_result = self.u2net.load_state_dict(state_dict, strict=False)
+                        if len(load_result.missing_keys) < 20:  # 只有少量缺失
+                            print("成功通过直接加载到u2net子模块")
+                        else:
+                            print(f"直接加载到u2net子模块部分成功，但有 {len(load_result.missing_keys)} 个参数缺失")
                     except Exception as e:
                         print(f"子模块加载失败: {e}")
                         # 添加前缀再尝试
                         try:
                             u2net_state_dict = {"u2net." + k: v for k, v in state_dict.items()}
-                            self.load_state_dict(u2net_state_dict, strict=False)
-                            print("成功通过添加前缀方式加载")
+                            load_result = self.load_state_dict(u2net_state_dict, strict=False)
+                            if len(load_result.missing_keys) < 100:
+                                print("成功通过添加前缀方式加载")
+                            else:
+                                print(f"添加前缀加载部分成功，但有 {len(load_result.missing_keys)} 个参数缺失")
                         except Exception as e:
                             print(f"添加前缀加载失败: {e}")
                 
@@ -315,7 +405,14 @@ class U2NetWithClassifier(nn.Module):
             except Exception as e:
                 print(f"加载权重失败: {e}")
                 print("将使用随机初始化的权重")
-        
+                
+        # 确保所有BatchNorm层已固定，如果eval_backbone为True
+        if self.eval_backbone:
+            self.u2net.eval()
+            for m in self.u2net.modules():
+                if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                    m.eval()
+    
     def forward(self, x):
         # 获取U2NET的所有输出
         d0, d1, d2, d3, d4, d5, d6 = self.u2net(x)
@@ -338,22 +435,36 @@ class SegClassDataset(SalObjDataset):
         # 获取原有的图像和分割标签
         sample = super(SegClassDataset, self).__getitem__(idx)
         
-        # 从分割标签确定分类标签 (1, 2 或 3)
-        label_mask = sample['label']
+        # 从原始mask文件直接读取分类标签，而不是处理过的sample['label']
+        label_path = self.label_name_list[idx]
         
-        # 分析mask中的像素值，确定类别
-        unique_values = np.unique(label_mask)
-        
-        # 移除背景值（通常为0）
-        unique_values = unique_values[unique_values > 0]
-        
-        # 如果有多个值，选择值最大的那个（或根据具体需求设计规则）
-        if len(unique_values) > 0:
-            class_label = int(np.max(unique_values))
-            # 确保类别值在1-3范围内
-            class_label = max(1, min(class_label, 3))
-        else:
-            # 如果没有前景，设为默认类别（例如1）
+        # 读取原始mask图像
+        try:
+            if os.path.exists(label_path):
+                # 读取原始标签图像
+                original_mask = io.imread(label_path)
+                
+                # 分析mask中的像素值，确定类别
+                unique_values = np.unique(original_mask)
+                
+                # 移除背景值（通常为0）
+                unique_values = unique_values[unique_values > 0]
+                
+                # 如果有多个值，选择值最大的那个
+                if len(unique_values) > 0:
+                    class_label = int(np.max(unique_values))
+                    # 确保类别值在1-3范围内
+                    class_label = max(1, min(class_label, 3))
+                else:
+                    # 如果没有前景，设为默认类别（例如1）
+                    class_label = 1
+            else:
+                # 如果标签文件不存在，设置默认类别
+                print(f"警告: 标签文件不存在 {label_path}")
+                class_label = 1
+        except Exception as e:
+            print(f"读取标签文件出错 {label_path}: {e}")
+            # 发生错误时使用默认类别
             class_label = 1
             
         # 转换为从0开始的索引 (PyTorch分类常用方式)
@@ -653,29 +764,11 @@ class TrainerWithClassifier:
         Returns:
             准确率值，介于0-1之间
         """
-        # 正规化预测和目标，确保值域正确
-        if pred.max() > 1 or pred.min() < 0:
-            # 防止极端值导致异常
-            min_val = pred.min()
-            max_val = max(pred.max(), min_val + 1e-6)  # 避免除零
-            pred = (pred - min_val) / (max_val - min_val)
-        
-        if target.max() > 1 or target.min() < 0:
-            min_val = target.min()
-            max_val = max(target.max(), min_val + 1e-6)  # 避免除零
-            target = (target - min_val) / (max_val - min_val)
-        
-        # 二值化预测和目标
-        pred_binary = (pred > threshold).float()
-        target_binary = (target > threshold).float()
-        
-        # 计算准确率 (像素级)
-        correct = (pred_binary == target_binary).float().sum()
+        pred = (pred > threshold).float()
+        target = (target > threshold).float()
+        correct = (pred == target).float().sum()
         total = target.numel()
-        
-        # 确保结果合理
-        accuracy = (correct / total).item()
-        return max(0.0, min(1.0, accuracy))  # 限制在0-1范围
+        return (correct / total).item()
     
     @staticmethod
     def calculate_cls_accuracy(pred, target):
@@ -759,66 +852,171 @@ def main():
     else:
         print(f"警告: 预训练模型 {config.pretrained_model_path} 不存在!")
         print("将创建一个新的未初始化模型。")
+        return  # 如果没有预训练模型，终止程序
     
-    # 创建模型并设置预训练权重
+    # 首先创建和加载原始U2NET模型进行对比基准测试
+    print("\n======== 第1步：加载原始U2NET模型用作基准参考 ========")
+    original_u2net = U2NET(3, 1)
+    original_u2net.to(device)
+    
+    try:
+        # 加载预训练权重到原始模型
+        original_u2net.load_state_dict(torch.load(config.pretrained_model_path, map_location=device))
+        original_u2net.eval()  # 设置为评估模式
+        print("原始U2NET模型加载成功，将作为基准参考")
+    except Exception as e:
+        print(f"加载原始U2NET模型失败: {e}")
+        print("将创建一个新的模型继续")
+    
+    # 创建带分类头的扩展模型
+    print("\n======== 第2步：创建带分类头的扩展U2NET模型 ========")
     model = U2NetWithClassifier(
         n_classes=config.n_classes, 
         pretrained_path=config.pretrained_model_path,
-        freeze_backbone=config.freeze_backbone
+        freeze_backbone=config.freeze_backbone,
+        eval_backbone=True  # 确保主干网络保持评估模式
     )
     model.to(device)
     
-    # 对预训练模型进行简单验证，确保加载正确
-    print("验证预训练模型加载情况...")
-    model.eval()  # 设置为评估模式
+    # 严格验证两个模型的主干网络输出是否一致
+    print("\n======== 第3步：严格验证冻结的主干网络输出与原始模型一致性 ========")
+    model.eval()  # 先设置为评估模式进行测试
     with torch.no_grad():
-        # 获取一个批次的数据
         try:
+            # 获取一个批次的数据
             sample_batch = next(iter(dataloader))
-            inputs, seg_labels = sample_batch['image'], sample_batch['label']
-            inputs = inputs.type(torch.FloatTensor).to(device)
-            seg_labels = seg_labels.type(torch.FloatTensor).to(device)
+            inputs = sample_batch['image'].type(torch.FloatTensor).to(device)
             
-            # 前向传播
-            seg_outputs, _ = model(inputs)
+            # 1. 通过原始U2NET模型前向传播
+            original_outputs = original_u2net(inputs)
+            orig_d0 = original_outputs[0]  # 获取最终分割结果
+            
+            # 2. 通过带分类头的U2NET模型前向传播
+            u2net_with_cls_outputs, _ = model(inputs)
+            cls_d0 = u2net_with_cls_outputs[0]  # 获取最终分割结果
+            
+            # 3. 计算两个输出的差异
+            # 计算平均绝对误差
+            mae = torch.mean(torch.abs(orig_d0 - cls_d0)).item()
+            
+            # 计算元素级别的最大差异
+            max_diff = torch.max(torch.abs(orig_d0 - cls_d0)).item()
+            
+            print(f"两个模型输出的平均绝对误差 (MAE): {mae:.8f}")
+            print(f"两个模型输出的最大绝对误差: {max_diff:.8f}")
+            
+            # 判断输出是否基本一致 (允许浮点误差)
+            is_consistent = mae < 1e-5 and max_diff < 1e-4
+            
+            if is_consistent:
+                print("验证成功: 冻结的主干网络输出与原始模型基本一致!")
+            else:
+                print("警告: 冻结的主干网络输出与原始模型存在差异!")
+                print("这可能是由于BatchNorm层统计值的差异或其他因素导致")
+                print("如果差异很小，通常不会对训练过程产生明显影响")
+            
+            # 检查一下两个模型中一些关键层的权重是否完全相同
+            print("\n检查两个模型的一些关键层权重:")
+            
+            # 获取第一个卷积层权重
+            try:
+                # 找到原始模型的第一个卷积层
+                for name, module in original_u2net.named_modules():
+                    if isinstance(module, nn.Conv2d):
+                        orig_first_conv = module
+                        orig_name = name
+                        break
+                
+                # 找到扩展模型的第一个卷积层
+                for name, module in model.u2net.named_modules():
+                    if isinstance(module, nn.Conv2d):
+                        cls_first_conv = module
+                        cls_name = name
+                        break
+                
+                # 比较两个权重
+                weight_diff = torch.mean(torch.abs(orig_first_conv.weight - cls_first_conv.weight)).item()
+                print(f"第一个卷积层权重差异 ('{orig_name}' vs 'u2net.{cls_name}'): {weight_diff:.8f}")
+                
+                if weight_diff < 1e-8:
+                    print("权重完全一致!")
+                else:
+                    print("警告: 权重存在差异!")
+            except Exception as e:
+                print(f"比较权重时出错: {e}")
             
             # 计算初始分割准确率
-            initial_seg_acc = TrainerWithClassifier.calculate_seg_accuracy(seg_outputs[0], seg_labels)
-            print(f"预训练模型初始分割准确率: {initial_seg_acc:.4f}")
+            seg_labels = sample_batch['label'].type(torch.FloatTensor).to(device)
             
-            # 如果准确率异常低，可能加载有问题
-            if initial_seg_acc < 0.5:
-                print("警告: 预训练模型准确率异常低，可能没有正确加载权重！")
-                print("可能原因: 1) 权重文件与模型结构不匹配; 2) 数据集与预训练数据不兼容; 3) 预处理方式不一致")
+            # 分别计算原始模型和扩展模型的准确率
+            orig_accuracy = TrainerWithClassifier.calculate_seg_accuracy(orig_d0, seg_labels)
+            cls_accuracy = TrainerWithClassifier.calculate_seg_accuracy(cls_d0, seg_labels)
+            
+            print(f"\n原始U2NET模型分割准确率: {orig_accuracy:.4f}")
+            print(f"带分类头的U2NET模型分割准确率: {cls_accuracy:.4f}")
+            print(f"准确率差异: {abs(orig_accuracy - cls_accuracy):.4f}")
+            
+            if abs(orig_accuracy - cls_accuracy) < 1e-4:
+                print("准确率几乎完全一致!")
             else:
-                print("预训练模型加载正常，准确率在合理范围内")
+                print(f"准确率存在差异，但幅度{'可接受' if abs(orig_accuracy - cls_accuracy) < 0.05 else '较大'}")
+                
         except Exception as e:
-            print(f"验证预训练模型时出错: {e}")
+            print(f"验证模型一致性时出错: {e}")
     
-    # 设置回训练模式
-    model.train()
+    # 设置回训练模式准备训练
+    print("\n======== 第4步：准备训练模式 ========")
+    model.train()  # 返回训练模式，但主干网络仍处于评估模式
+    
+    # 验证冻结情况
+    u2net_params_count = 0
+    frozen_params_count = 0
+    
+    for name, param in model.named_parameters():
+        if 'u2net' in name:
+            u2net_params_count += 1
+            if not param.requires_grad:
+                frozen_params_count += 1
+    
+    print(f"U2NET主干网络共有 {u2net_params_count} 个参数，其中 {frozen_params_count} 个已冻结")
+    
+    if frozen_params_count == u2net_params_count:
+        print("U2NET主干网络已完全冻结!")
+    else:
+        print(f"警告: 只有 {frozen_params_count}/{u2net_params_count} 个U2NET参数被冻结!")
+        
+        # 如果有未冻结的参数，打印它们的名称
+        unfrozen_params = [name for name, param in model.named_parameters() 
+                         if 'u2net' in name and param.requires_grad]
+        
+        if len(unfrozen_params) > 0:
+            print(f"未冻结的U2NET参数示例: {unfrozen_params[:min(5, len(unfrozen_params))]}")
+    
+    # 验证BatchNorm层模式
+    bn_layers_count = 0
+    bn_eval_count = 0
+    
+    for name, module in model.u2net.named_modules():
+        if isinstance(module, (nn.BatchNorm2d, nn.BatchNorm1d)):
+            bn_layers_count += 1
+            if not module.training:  # 如果模块处于eval模式
+                bn_eval_count += 1
+    
+    print(f"U2NET主干网络共有 {bn_layers_count} 个BatchNorm层，其中 {bn_eval_count} 个处于评估模式")
+    
+    if bn_eval_count == bn_layers_count:
+        print("所有BatchNorm层都已固定为评估模式!")
+    else:
+        print(f"警告: 只有 {bn_eval_count}/{bn_layers_count} 个BatchNorm层处于评估模式!")
     
     # 设置优化器 - 如果冻结backbone，只优化分类头
+    print("\n======== 第5步：配置优化器和训练参数 ========")
     if config.freeze_backbone:
-        # 验证U2NET主干是否已冻结
-        u2net_params_count = 0
-        classifier_params_count = 0
-        
-        for name, param in model.named_parameters():
-            if 'u2net' in name:
-                if param.requires_grad:
-                    print(f"警告: U2NET参数 {name} 应该被冻结，但仍然可训练")
-                u2net_params_count += 1
-            else:
-                classifier_params_count += 1
-        
-        print(f"已冻结 {u2net_params_count} 个U2NET参数，保持 {classifier_params_count} 个分类头参数可训练")
-        
         # 验证哪些参数会被优化
         trainable_params = [name for name, param in model.named_parameters() if param.requires_grad]
         print(f"可训练的参数: {len(trainable_params)}")
         if len(trainable_params) > 0:
-            print(f"示例可训练参数: {trainable_params[:3]}...")
+            print(f"示例可训练参数: {trainable_params[:min(3, len(trainable_params))]}...")
         
         # 只优化分类头的参数 (requires_grad=True的参数)
         optimizer = optim.Adam(
@@ -860,13 +1058,15 @@ def main():
         device=device
     )
     
+    print("\n======== 第6步：开始训练过程 ========")
     print("=" * 50)
-    print("开始训练:")
+    print("训练配置:")
     print(f"- 分阶段训练: {'是' if config.freeze_backbone else '否'}")
     print(f"- 第一阶段epochs: {config.phase1_epochs}")
     print(f"- 总epochs: {config.epoch_num}")
     print(f"- 批次大小: {config.batch_size_train}")
     print(f"- 学习率: {config.lr}（微调: {config.finetune_lr}）")
+    print(f"- 主干网络评估模式: {'是' if model.eval_backbone else '否'}")
     print("=" * 50)
     
     trainer.train(

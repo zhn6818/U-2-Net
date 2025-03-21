@@ -13,7 +13,7 @@ from data_loader import ToTensorLab
 from u2net_classify import U2NetWithClassifier
 
 # 定义类别名称
-CLASS_NAMES = ['类别1', '类别2', '类别3']
+CLASS_NAMES = ['M', 'B', 'P']
 
 def load_model(model_path, n_classes=3, device='cpu'):
     """加载训练好的模型"""
@@ -178,8 +178,8 @@ def visualize_prediction(image_path, pred_result, output_path=None):
         
         # 准备可视化图像
         font = cv2.FONT_HERSHEY_SIMPLEX
-        text = f"类别: {class_name}, 置信度: {class_prob:.2f}"
-        cv2.putText(overlay, text, (10, 30), font, 0.7, (255, 255, 255), 2)
+        text = f"class: {class_name}, cofidence: {class_prob:.2f}"
+        cv2.putText(overlay, text, (50, 100), font, 3.0, (255, 0, 0), 5)
         
         # 保存结果
         if output_path:
@@ -275,7 +275,7 @@ def test_batch(model_path, image_dir, output_dir, ext='.jpg'):
 if __name__ == "__main__":
     # 参数设置
     # 注意：无论模型是在哪个设备上训练的，代码都会自动将其映射到当前可用设备(CUDA/MPS/CPU)
-    model_path = "daizhuang_saved_models_classify/u2net_cls/u2net_cls_best_segacc_0.9359_epoch_1.pth"  # 修改为您的模型路径
+    model_path = "daizhuang_saved_models_classify/u2net_cls/u2net_cls_best_clsacc_0.8136_epoch_5.pth"  # 修改为您的模型路径
     
     # 确保测试目录存在
     if not os.path.exists("test_images"):

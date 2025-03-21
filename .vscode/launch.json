@@ -11,6 +11,13 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: u2net_classify_test.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_classify_test.py",
+            "console": "integratedTerminal"
         }
     ]
 }
