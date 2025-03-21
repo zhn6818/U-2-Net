@@ -6,3 +6,5 @@
 *.log
 train_data/
 daizhuang
+test_images
+test_results

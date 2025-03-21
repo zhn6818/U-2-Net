@@ -126,9 +126,9 @@ def inference_folder(image_dir, model_path, output_dir, model_type='u2net'):
 if __name__ == "__main__":
     # 示例使用
     model_type = 'u2net'
-    image_dir = 'daizhuang/images/'
-    model_path = 'daizhuang_saved_models_512/u2net/u2net_best_acc_0.8866_epoch_13.pth'
-    output_dir = 'daizhuang/infer/'
+    image_dir = 'test_images/'
+    model_path = 'daizhuang_saved_models_512/u2net/u2net_best_acc_0.9340_epoch_91.pth'
+    output_dir = 'test_results/'
     
     inference_folder(
         image_dir=image_dir,
