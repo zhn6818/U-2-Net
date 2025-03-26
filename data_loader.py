@@ -268,3 +268,168 @@ class SalObjDataset(Dataset):
 			sample = self.transform(sample)
 
 		return sample
+
+# ===================== 添加多通道分割任务支持 ======================
+class MultiChannelToTensorLab(object):
+    """
+    将图像和多通道标签转换为Tensor格式。
+    此类专为多通道分割任务设计，可以处理任意数量的输出通道。
+    """
+    def __init__(self, flag=0, num_channels=2):
+        """
+        初始化函数
+        Args:
+            flag: 颜色空间标志，与原始ToTensorLab相同
+                 0: RGB颜色 (默认)
+                 1: Lab颜色
+                 2: RGB+Lab颜色
+            num_channels: 标签中的通道数，默认为2
+        """
+        self.flag = flag
+        self.num_channels = num_channels
+
+    def __call__(self, sample):
+        imidx, image, label = sample['imidx'], sample['image'], sample['label']
+
+        # 归一化多通道标签
+        tmpLbl = np.zeros(label.shape)
+        if(np.max(label) < 1e-6):
+            label = label
+        else:
+            # 对每个通道分别归一化
+            for c in range(label.shape[2]):
+                channel = label[:,:,c]
+                if np.max(channel) > 1e-6:
+                    label[:,:,c] = channel / np.max(channel)
+
+        # 图像处理部分与原来ToTensorLab相同
+        if self.flag == 2:  # with rgb and Lab colors
+            tmpImg = np.zeros((image.shape[0], image.shape[1], 6))
+            tmpImgt = np.zeros((image.shape[0], image.shape[1], 3))
+            if image.shape[2] == 1:
+                tmpImgt[:,:,0] = image[:,:,0]
+                tmpImgt[:,:,1] = image[:,:,0]
+                tmpImgt[:,:,2] = image[:,:,0]
+            else:
+                tmpImgt = image
+            tmpImgtl = color.rgb2lab(tmpImgt)
+
+            # normalize image to range [0,1]
+            tmpImg[:,:,0] = (tmpImgt[:,:,0] - np.min(tmpImgt[:,:,0])) / (np.max(tmpImgt[:,:,0]) - np.min(tmpImgt[:,:,0]))
+            tmpImg[:,:,1] = (tmpImgt[:,:,1] - np.min(tmpImgt[:,:,1])) / (np.max(tmpImgt[:,:,1]) - np.min(tmpImgt[:,:,1]))
+            tmpImg[:,:,2] = (tmpImgt[:,:,2] - np.min(tmpImgt[:,:,2])) / (np.max(tmpImgt[:,:,2]) - np.min(tmpImgt[:,:,2]))
+            tmpImg[:,:,3] = (tmpImgtl[:,:,0] - np.min(tmpImgtl[:,:,0])) / (np.max(tmpImgtl[:,:,0]) - np.min(tmpImgtl[:,:,0]))
+            tmpImg[:,:,4] = (tmpImgtl[:,:,1] - np.min(tmpImgtl[:,:,1])) / (np.max(tmpImgtl[:,:,1]) - np.min(tmpImgtl[:,:,1]))
+            tmpImg[:,:,5] = (tmpImgtl[:,:,2] - np.min(tmpImgtl[:,:,2])) / (np.max(tmpImgtl[:,:,2]) - np.min(tmpImgtl[:,:,2]))
+
+            tmpImg[:,:,0] = (tmpImg[:,:,0] - np.mean(tmpImg[:,:,0])) / np.std(tmpImg[:,:,0])
+            tmpImg[:,:,1] = (tmpImg[:,:,1] - np.mean(tmpImg[:,:,1])) / np.std(tmpImg[:,:,1])
+            tmpImg[:,:,2] = (tmpImg[:,:,2] - np.mean(tmpImg[:,:,2])) / np.std(tmpImg[:,:,2])
+            tmpImg[:,:,3] = (tmpImg[:,:,3] - np.mean(tmpImg[:,:,3])) / np.std(tmpImg[:,:,3])
+            tmpImg[:,:,4] = (tmpImg[:,:,4] - np.mean(tmpImg[:,:,4])) / np.std(tmpImg[:,:,4])
+            tmpImg[:,:,5] = (tmpImg[:,:,5] - np.mean(tmpImg[:,:,5])) / np.std(tmpImg[:,:,5])
+
+        elif self.flag == 1:  # with Lab color
+            tmpImg = np.zeros((image.shape[0], image.shape[1], 3))
+
+            if image.shape[2] == 1:
+                tmpImg[:,:,0] = image[:,:,0]
+                tmpImg[:,:,1] = image[:,:,0]
+                tmpImg[:,:,2] = image[:,:,0]
+            else:
+                tmpImg = image
+
+            tmpImg = color.rgb2lab(tmpImg)
+
+            tmpImg[:,:,0] = (tmpImg[:,:,0] - np.min(tmpImg[:,:,0])) / (np.max(tmpImg[:,:,0]) - np.min(tmpImg[:,:,0]))
+            tmpImg[:,:,1] = (tmpImg[:,:,1] - np.min(tmpImg[:,:,1])) / (np.max(tmpImg[:,:,1]) - np.min(tmpImg[:,:,1]))
+            tmpImg[:,:,2] = (tmpImg[:,:,2] - np.min(tmpImg[:,:,2])) / (np.max(tmpImg[:,:,2]) - np.min(tmpImg[:,:,2]))
+
+            tmpImg[:,:,0] = (tmpImg[:,:,0] - np.mean(tmpImg[:,:,0])) / np.std(tmpImg[:,:,0])
+            tmpImg[:,:,1] = (tmpImg[:,:,1] - np.mean(tmpImg[:,:,1])) / np.std(tmpImg[:,:,1])
+            tmpImg[:,:,2] = (tmpImg[:,:,2] - np.mean(tmpImg[:,:,2])) / np.std(tmpImg[:,:,2])
+
+        else:  # with rgb color
+            tmpImg = np.zeros((image.shape[0], image.shape[1], 3))
+            image = image / np.max(image)
+            if image.shape[2] == 1:
+                tmpImg[:,:,0] = (image[:,:,0] - 0.485) / 0.229
+                tmpImg[:,:,1] = (image[:,:,0] - 0.485) / 0.229
+                tmpImg[:,:,2] = (image[:,:,0] - 0.485) / 0.229
+            else:
+                tmpImg[:,:,0] = (image[:,:,0] - 0.485) / 0.229
+                tmpImg[:,:,1] = (image[:,:,1] - 0.456) / 0.224
+                tmpImg[:,:,2] = (image[:,:,2] - 0.406) / 0.225
+
+        # 转置后返回
+        tmpImg = tmpImg.transpose((2, 0, 1))
+        tmpLbl = label.transpose((2, 0, 1))
+
+        return {
+            'imidx': torch.from_numpy(imidx.copy()).long(),
+            'image': torch.from_numpy(tmpImg.copy()).float(),
+            'label': torch.from_numpy(tmpLbl.copy()).float()
+        }
+
+class MultiChannelSalObjDataset(Dataset):
+    """
+    多通道分割数据集，支持任意数量的分割通道
+    """
+    def __init__(self, img_name_list, lbl_name_list, transform=None, num_channels=2):
+        self.image_name_list = img_name_list
+        self.label_name_list = lbl_name_list
+        self.transform = transform
+        self.num_channels = num_channels
+
+    def __len__(self):
+        return len(self.image_name_list)
+
+    def __getitem__(self, idx):
+        # 加载图像
+        image = io.imread(self.image_name_list[idx])
+        imname = self.image_name_list[idx]
+        imidx = np.array([idx])
+
+        # 处理图像格式
+        if len(image.shape) == 2:  # 灰度图转换为3通道
+            image = image[:, :, np.newaxis]
+            image = np.concatenate([image, image, image], axis=2)
+        
+        # 读取标签
+        if len(self.label_name_list) == 0:
+            # 如果没有标签，创建全零标签
+            label = np.zeros((image.shape[0], image.shape[1], self.num_channels))
+        else:
+            # 读取标签文件
+            label = io.imread(self.label_name_list[idx])
+            
+            # 处理标签格式
+            if len(label.shape) == 2:  # 单通道标签
+                # 如果标签是单通道的，但需要多通道输出
+                if self.num_channels > 1:
+                    # 这里我们假设每个通道分别表示不同的类别
+                    # 创建一个多通道的标签
+                    multi_label = np.zeros((label.shape[0], label.shape[1], self.num_channels))
+                    
+                    # 根据像素值处理多通道标签，假设像素值代表类别
+                    # 例如: 像素值为1的区域是第1类，像素值为2的区域是第2类，以此类推
+                    for c in range(self.num_channels):
+                        multi_label[:, :, c] = (label == c+1).astype(float)
+                    
+                    label = multi_label
+                else:
+                    # 单通道标签，保持不变，但添加通道维度
+                    label = label[:, :, np.newaxis]
+            
+            # 确保标签具有正确的通道数
+            if label.shape[2] != self.num_channels:
+                raise ValueError(f"标签通道数 {label.shape[2]} 与期望的通道数 {self.num_channels} 不符")
+
+        # 组装样本
+        sample = {'imidx': imidx, 'image': image, 'label': label}
+        
+        # 应用变换
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample

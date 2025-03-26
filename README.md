@@ -265,3 +265,50 @@ python u2net_train_dai.py
 ```
 
 如需修改训练参数，可以直接在`Config`类中进行调整，无需修改其他代码。
+
+## 更新：多通道分割支持
+
+本项目新增了对多通道分割任务的支持，可以处理多类别分割。现有的功能包括：
+
+### 多通道分割数据集和训练
+
+我们新增了以下文件：
+1. 在`data_loader.py`中添加了`MultiChannelSalObjDataset`和`MultiChannelToTensorLab`类，支持多通道标签处理
+2. 新增`u2net_train_multichannel.py`用于训练多通道分割模型
+3. 新增`u2net_infer_multichannel.py`用于多通道分割模型的推理
+
+### 使用多通道分割功能
+
+1. **准备数据集**：
+   - 每个标签图像可以是单通道图像（像素值表示类别）或直接是多通道图像
+   - 在单通道标签中，假设像素值为1的区域是第1类，像素值为2的区域是第2类，依此类推
+
+2. **训练多通道分割模型**：
+   ```bash
+   python u2net_train_multichannel.py
+   ```
+   可以在`Config`类中调整参数：
+   - `num_classes`：设置分割类别数量（即输出通道数）
+   - `pretrained_model_path`：可选择加载预训练的单通道模型权重
+
+3. **使用多通道分割模型推理**：
+   ```bash
+   python u2net_infer_multichannel.py --model_path MODEL_PATH --input_dir INPUT_IMAGES_DIR --num_classes NUM_CLASSES
+   ```
+   参数说明：
+   - `model_path`：训练好的多通道模型路径（必需）
+   - `input_dir`：输入图像目录（默认：test_images）
+   - `output_dir`：输出结果保存目录（默认：test_results）
+   - `model_name`：模型类型，u2net或u2netp（默认：u2net）
+   - `num_classes`：分割类别数量（默认：2）
+   - `input_size`：输入图像大小（默认：512）
+
+4. **推理结果**：
+   - 会为每个输入图像生成一个包含所有类别可视化的结果图像（`*_visual.png`）
+   - 为每个类别生成单独的掩码图像（`*_class1.png`, `*_class2.png`等）
+
+### 注意事项
+
+1. 从单通道模型迁移到多通道模型时，脚本会自动处理输出层参数的差异，保留编码器部分的权重
+2. 多通道模型的评估采用了像素级准确率和Dice系数两种指标
+3. 建议使用RescaleT(512)和MultiChannelToTensorLab变换来处理图像和标签

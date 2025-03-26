@@ -18,6 +18,54 @@
             "request": "launch",
             "program": "u2net_classify_test.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: u2net_infer_multichannel.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_infer_multichannel.py",
+            "args": [
+                "--model_path",
+                "tuotan_saved_models_multichannel/u2net/u2net_best_dice_0.8764_epoch_8.pth",
+                "--input_dir",
+                "test_tuotan",
+                "--output_dir",
+                "test_resulttuotan",
+                "--gt_dir",
+                "/Volumes/data1/JH/projects/ttprocess/train/masks",
+                "--model_name",
+                "u2net",
+                "--num_classes",
+                "4",
+                "--input_size",
+                "512",
+                "--flag",
+                "0"
+            ]
+        },
+        {
+            "name": "Python Debugger: u2net_infer_multichannel3.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_infer_multichannel.py",
+            "args": [
+                "--model_path",
+                "tuotan3_saved_models_multichannel/u2net/u2net_best_dice_0.8684_epoch_7.pth",
+                "--input_dir",
+                "/Volumes/data1/JH/projects/ttprocess/train_/images",
+                "--output_dir",
+                "test_resulttuotan3",
+                "--gt_dir",
+                "/Volumes/data1/JH/projects/ttprocess/train_/masks",
+                "--model_name",
+                "u2net",
+                "--num_classes",
+                "3",
+                "--input_size",
+                "512",
+                "--flag",
+                "0"
+            ]
         }
     ]
 }
