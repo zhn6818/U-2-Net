@@ -44,7 +44,7 @@ class Config:
         self.model_dir = os.path.join(os.getcwd(), 'tuotan3_saved_models_multichannel', self.model_name + os.sep)
         
         # 预训练模型 - 如果使用预训练的单通道模型，这里设置路径
-        self.pretrained_model_path = "tuotan3_saved_models_multichannel/u2net/u2net_bce_itr_2000_train_1.2033.pth"
+        self.pretrained_model_path = "tuotan3_saved_models_multichannel/u2net/u2net_best_accuracy_0.9380_epoch_3.pth"
         self.start_epoch = 0  # 从哪个epoch开始训练
         
         # 训练参数

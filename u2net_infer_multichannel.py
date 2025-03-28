@@ -123,7 +123,7 @@ def find_gt_mask(filename, gt_dir, num_classes):
                     # 多类别分割任务，将单通道转为多通道
                     gt_masks = []
                     for c in range(num_classes):
-                        mask = (gt_image == c+1).astype(float)
+                        mask = (gt_image == c).astype(float)
                         gt_masks.append(mask)
                     return gt_masks
                 else:
