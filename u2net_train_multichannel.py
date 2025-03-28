@@ -44,7 +44,7 @@ class Config:
         self.model_dir = os.path.join(os.getcwd(), 'tuotan3_saved_models_multichannel', self.model_name + os.sep)
         
         # 预训练模型 - 如果使用预训练的单通道模型，这里设置路径
-        self.pretrained_model_path = ""
+        self.pretrained_model_path = "tuotan3_saved_models_multichannel/u2net/u2net_bce_itr_2000_train_1.2033.pth"
         self.start_epoch = 0  # 从哪个epoch开始训练
         
         # 训练参数
@@ -183,8 +183,9 @@ class LossFunctions:
         batch_size, num_channels = pred.shape[0], pred.shape[1]
         boundary_loss = 0.0
         
-        # 只计算前两个通道的边界损失 (索引为0和1的通道)
-        for c in range(1, min(3, num_channels)):  # 跳过背景通道(0)，只计算通道1和2
+        # 跳过背景通道(0)，计算所有前景通道的边界损失
+        foreground_channels = 0  # 记录前景通道数量
+        for c in range(1, num_channels):  # 从索引1开始，跳过背景通道0
             # 提取当前通道
             pred_c = pred[:, c:c+1, :, :]  # [B, 1, H, W]
             target_c = target[:, c:c+1, :, :]  # [B, 1, H, W]
@@ -199,9 +200,11 @@ class LossFunctions:
             # 计算边界损失 (使用L1损失)
             channel_loss = F.l1_loss(pred_boundaries, target_boundaries)
             boundary_loss += channel_loss
+            foreground_channels += 1
         
         # 通道数量归一化
-        boundary_loss = boundary_loss / (min(num_channels-1, 2))  # 减1是因为跳过了背景通道
+        if foreground_channels > 0:
+            boundary_loss = boundary_loss / foreground_channels
         
         return boundary_loss
         
@@ -231,10 +234,15 @@ class LossFunctions:
         # 总损失 = BCE损失 + 边界损失*权重
         total_loss = bce_loss + boundary_weight * boundary_loss
         
-        print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f, boundary: %3f\n"%(
+        # 输出损失信息
+        print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f, boundary: %3f"%(
             loss0.data.item(), loss1.data.item(), loss2.data.item(), 
             loss3.data.item(), loss4.data.item(), loss5.data.item(), 
             loss6.data.item(), boundary_loss.data.item()))
+        
+        # 输出通道信息
+        # num_channels = d0.shape[1]
+        # print(f"处理了 {num_channels} 个通道，其中 {num_channels-1} 个前景通道的边界损失被计算")
         
         return loss0, total_loss
     
@@ -437,16 +445,6 @@ class Trainer:
                 epoch_tar_loss += loss2.data.item()
                 batch_count += 1
                 
-                # 释放内存
-                del d0, d1, d2, d3, d4, d5, d6, loss2, loss
-                
-                # 输出训练进度
-                print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f" % (
-                    epoch + 1, self.config.epoch_num, (i + 1) * self.config.batch_size_train, 
-                    len(self.dataloader.dataset), ite_num, 
-                    running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy
-                ))
-                
                 # 定期保存模型
                 if ite_num % self.config.save_freq == 0:
                     torch.save(
@@ -456,7 +454,8 @@ class Trainer:
                             f"{self.config.model_name}_bce_itr_{ite_num}_train_{running_loss / ite_num4val:.4f}.pth"
                         )
                     )
-                    # 保存边界可视化
+                    
+                    # 保存边界可视化（在删除变量之前）
                     vis_path = os.path.join(
                         self.config.model_dir, 
                         f"boundaries_itr_{ite_num}.png"
@@ -467,6 +466,16 @@ class Trainer:
                     running_tar_loss = 0.0
                     self.model.train()  # 继续训练
                     ite_num4val = 0
+                
+                # 释放内存（移动到边界可视化之后）
+                del d0, d1, d2, d3, d4, d5, d6, loss2, loss
+                
+                # 输出训练进度
+                print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f\n" % (
+                    epoch + 1, self.config.epoch_num, (i + 1) * self.config.batch_size_train, 
+                    len(self.dataloader.dataset), ite_num, 
+                    running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy
+                ))
             
             # 计算每个epoch的平均统计数据
             avg_epoch_loss = epoch_loss / batch_count
