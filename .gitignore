@@ -13,3 +13,4 @@ test_resulttuotan3
 test_tuotan
 __pycache__
 .DS_Store
+.train_pid

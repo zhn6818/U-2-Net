@@ -32,7 +32,7 @@ class Config:
         self.model_name = 'u2net'  # 'u2netp'
         
         # 数据路径
-        self.data_dir = "U2net_data/train_data/"
+        self.data_dir = "U2net_data768/train_data/"
         self.tra_image_dir = os.path.join('im_aug' + os.sep)
         self.tra_label_dir = os.path.join('gt_aug' + os.sep)
         self.image_ext = '.jpg'
@@ -42,7 +42,7 @@ class Config:
         self.model_dir = os.path.join(os.getcwd(), 'saved_models_768', self.model_name + os.sep)
         
         # 预训练模型
-        self.pretrained_model_path = "saved_models_768/u2net.pth"
+        self.pretrained_model_path = "saved_models_768/u2net/u2net_best_acc_0.9027_epoch_4.pth"
         self.start_epoch = 0  # 从哪个epoch开始训练
         
         # 训练参数
