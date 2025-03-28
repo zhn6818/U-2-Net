@@ -17,6 +17,7 @@ import os
 from data_loader import Rescale
 from data_loader import RescaleT
 from data_loader import RandomCrop
+from data_loader import RandomSizedCrop
 from data_loader import ToTensor
 from data_loader import ToTensorLab
 from data_loader import SalObjDataset
@@ -31,22 +32,22 @@ class Config:
         self.model_name = 'u2net'  # 'u2netp'
         
         # 数据路径
-        self.data_dir = "daizhuang/"
-        self.tra_image_dir = os.path.join('images' + os.sep)
-        self.tra_label_dir = os.path.join('masks' + os.sep)
+        self.data_dir = "U2net_data/train_data/"
+        self.tra_image_dir = os.path.join('im_aug' + os.sep)
+        self.tra_label_dir = os.path.join('gt_aug' + os.sep)
         self.image_ext = '.jpg'
         self.label_ext = '.png'
         
         # 模型保存路径
-        self.model_dir = os.path.join(os.getcwd(), 'daizhuang_saved_models_512', self.model_name + os.sep)
+        self.model_dir = os.path.join(os.getcwd(), 'saved_models_768', self.model_name + os.sep)
         
         # 预训练模型
-        self.pretrained_model_path = ""
+        self.pretrained_model_path = "saved_models_768/u2net.pth"
         self.start_epoch = 0  # 从哪个epoch开始训练
         
         # 训练参数
         self.epoch_num = 100000
-        self.batch_size_train = 2
+        self.batch_size_train = 1
         self.batch_size_val = 1
         self.save_freq = 2000  # 保存模型的频率
         
@@ -131,8 +132,9 @@ class DatasetPreparation:
             img_name_list=img_name_list,
             lbl_name_list=lbl_name_list,
             transform=transforms.Compose([
-                RescaleT(512),
-                RandomCrop(460),
+                RescaleT(768),
+                # RandomCrop(460),
+                RandomSizedCrop(512, 768),
                 ToTensorLab(flag=0)
             ])
         )

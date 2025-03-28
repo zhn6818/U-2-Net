@@ -11,3 +11,5 @@ test_results
 test_resulttuotan
 test_resulttuotan3
 test_tuotan
+__pycache__
+.DS_Store

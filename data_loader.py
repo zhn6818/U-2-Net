@@ -99,6 +99,55 @@ class RandomCrop(object):
 		label = label[top: top + new_h, left: left + new_w]
 
 		return {'imidx':imidx,'image':image, 'label':label}
+class RandomSizedCrop(object):
+	"""
+	随机大小裁剪
+	在min_size和max_size之间随机选择裁剪尺寸，实现多尺度数据增强
+	"""
+	def __init__(self, min_size, max_size):
+		"""
+		初始化函数
+		Args:
+			min_size: 最小裁剪尺寸
+			max_size: 最大裁剪尺寸
+		"""
+		self.min_size = min_size
+		self.max_size = max_size
+		
+	def __call__(self, sample):
+		imidx, image, label = sample['imidx'], sample['image'], sample['label']
+		
+		# 随机水平翻转
+		if random.random() >= 0.5:
+			image = image[::-1]
+			label = label[::-1]
+		
+		h, w = image.shape[:2]
+		
+		# 随机选择裁剪尺寸
+		new_size = random.randint(self.min_size, self.max_size)
+		
+		# 确保裁剪大小不超过图像尺寸
+		new_size = min(new_size, min(h, w))
+		
+		# 设置裁剪的高度和宽度
+		new_h, new_w = new_size, new_size
+		
+		# 确保不会越界
+		if h <= new_h or w <= new_w:
+			# 如果图像尺寸小于裁剪尺寸，直接返回原图
+			return {'imidx': imidx, 'image': image, 'label': label}
+		
+		# 计算随机裁剪的起始位置
+		top = np.random.randint(0, h - new_h)
+		left = np.random.randint(0, w - new_w)
+		
+		# 执行裁剪 (移除了减1操作，确保裁剪得到的是完整大小)
+		image = image[top: top + new_h, left: left + new_w]
+		label = label[top: top + new_h, left: left + new_w]
+		
+		return {'imidx': imidx, 'image': image, 'label': label}
+
 
 class ToTensor(object):
 	"""Convert ndarrays in sample to Tensors."""
