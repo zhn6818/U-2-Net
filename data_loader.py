@@ -460,10 +460,10 @@ class MultiChannelSalObjDataset(Dataset):
                     # 创建一个多通道的标签
                     multi_label = np.zeros((label.shape[0], label.shape[1], self.num_channels))
                     
-                    # 根据像素值处理多通道标签，假设像素值代表类别
-                    # 例如: 像素值为1的区域是第1类，像素值为2的区域是第2类，以此类推
+                    # 根据像素值处理多通道标签，像素值代表类别
+                    # 对于背景(值为0)和其他类别(值为1,2...)分别创建通道
                     for c in range(self.num_channels):
-                        multi_label[:, :, c] = (label == c+1).astype(float)
+                        multi_label[:, :, c] = (label == c).astype(float)
                     
                     label = multi_label
                 else:
