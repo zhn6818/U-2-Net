@@ -106,29 +106,6 @@ class LossFunctions:
         total = target.numel()
         
         return (correct / total).item()
-    
-    @staticmethod
-    def calculate_dice_coefficient(pred, target, threshold=0.5, smooth=1e-5):
-        """
-        计算多通道预测的Dice系数
-        Args:
-            pred: 预测的输出 [B, C, H, W]
-            target: 真实标签 [B, C, H, W]
-            threshold: 二值化阈值
-            smooth: 平滑因子，防止分母为0
-        Returns:
-            dice: Dice系数
-        """
-        pred = (pred > threshold).float()
-        target = (target > threshold).float()
-        
-        # 计算每个通道的Dice然后平均
-        intersection = (pred * target).sum()
-        union = pred.sum() + target.sum()
-        
-        dice = (2. * intersection + smooth) / (union + smooth)
-        
-        return dice.item()
 
 # --------- 2. 数据准备 ---------
 class DatasetPreparation:
@@ -258,7 +235,7 @@ class Trainer:
         self.dataloader = dataloader
         self.loss_funcs = loss_funcs
         self.device = device
-        self.best_dice = 0.0
+        self.best_accuracy = 0.0
         
     def train(self):
         """训练模型"""
@@ -273,7 +250,6 @@ class Trainer:
             epoch_loss = 0.0
             epoch_tar_loss = 0.0
             epoch_accuracy = 0.0
-            epoch_dice = 0.0
             batch_count = 0
             
             for i, data in enumerate(self.dataloader):
@@ -296,9 +272,7 @@ class Trainer:
                 
                 # 计算评价指标
                 batch_accuracy = self.loss_funcs.calculate_multichannel_accuracy(d0, labels_v)
-                batch_dice = self.loss_funcs.calculate_dice_coefficient(d0, labels_v)
                 epoch_accuracy += batch_accuracy
-                epoch_dice += batch_dice
                 
                 loss.backward()
                 self.optimizer.step()
@@ -314,10 +288,10 @@ class Trainer:
                 del d0, d1, d2, d3, d4, d5, d6, loss2, loss
                 
                 # 输出训练进度
-                print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f, dice: %3f" % (
+                print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f" % (
                     epoch + 1, self.config.epoch_num, (i + 1) * self.config.batch_size_train, 
                     len(self.dataloader.dataset), ite_num, 
-                    running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy, batch_dice
+                    running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy
                 ))
                 
                 # 定期保存模型
@@ -326,7 +300,7 @@ class Trainer:
                         self.model.state_dict(), 
                         os.path.join(
                             self.config.model_dir, 
-                            f"{self.config.model_name}_bce_itr_{ite_num}_train_{running_loss / ite_num4val:.4f}_dice_{batch_dice:.4f}.pth"
+                            f"{self.config.model_name}_bce_itr_{ite_num}_train_{running_loss / ite_num4val:.4f}.pth"
                         )
                     )
                     running_loss = 0.0
@@ -338,32 +312,30 @@ class Trainer:
             avg_epoch_loss = epoch_loss / batch_count
             avg_epoch_tar_loss = epoch_tar_loss / batch_count
             avg_epoch_accuracy = epoch_accuracy / batch_count
-            avg_epoch_dice = epoch_dice / batch_count
             
             # 输出epoch统计信息
             print(f"Epoch {epoch+1} Summary:")
             print(f"Average Loss: {avg_epoch_loss:.4f}")
             print(f"Average Accuracy: {avg_epoch_accuracy:.4f}")
-            print(f"Average Dice: {avg_epoch_dice:.4f}")
             
             # 每5个epoch保存一次模型
             if (epoch + 1) % 5 == 0:
                 save_path = os.path.join(
                     self.config.model_dir, 
-                    f"{self.config.model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}_dice_{avg_epoch_dice:.4f}.pth"
+                    f"{self.config.model_name}_epoch_{epoch+1}_loss_{avg_epoch_loss:.4f}.pth"
                 )
                 torch.save(self.model.state_dict(), save_path)
-                print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f} and dice {avg_epoch_dice:.4f}")
+                print(f"Model saved at epoch {epoch+1} with loss {avg_epoch_loss:.4f}")
             
             # 保存最佳模型
-            if avg_epoch_dice > self.best_dice:
-                self.best_dice = avg_epoch_dice
+            if avg_epoch_accuracy > self.best_accuracy:
+                self.best_accuracy = avg_epoch_accuracy
                 save_path = os.path.join(
                     self.config.model_dir, 
-                    f"{self.config.model_name}_best_dice_{self.best_dice:.4f}_epoch_{epoch+1}.pth"
+                    f"{self.config.model_name}_best_accuracy_{self.best_accuracy:.4f}_epoch_{epoch+1}.pth"
                 )
                 torch.save(self.model.state_dict(), save_path)
-                print(f"New best dice coefficient achieved! Model saved with dice: {self.best_dice:.4f}")
+                print(f"New best accuracy achieved! Model saved with accuracy: {self.best_accuracy:.4f}")
 
 # --------- 主函数 ---------
 def main():
