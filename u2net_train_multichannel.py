@@ -34,7 +34,7 @@ class Config:
         self.model_name = 'u2net'  # 'u2netp'
         
         # 数据路径
-        self.data_dir = "/Volumes/data1/JH/projects/ttprocess/train_/"
+        self.data_dir = "/data1/zhn/train_/"
         self.tra_image_dir = os.path.join('images' + os.sep)
         self.tra_label_dir = os.path.join('masks' + os.sep)
         self.image_ext = '.jpg'
@@ -49,7 +49,7 @@ class Config:
         
         # 训练参数
         self.epoch_num = 100000
-        self.batch_size_train = 8
+        self.batch_size_train = 2
         self.batch_size_val = 1
         self.save_freq = 2000  # 保存模型的频率
         
@@ -205,6 +205,8 @@ class LossFunctions:
         # 通道数量归一化
         if foreground_channels > 0:
             boundary_loss = boundary_loss / foreground_channels
+        else:
+            boundary_loss = torch.tensor(0.0, device=pred.device)
         
         return boundary_loss
         
@@ -451,7 +453,7 @@ class Trainer:
                         self.model.state_dict(), 
                         os.path.join(
                             self.config.model_dir, 
-                            f"{self.config.model_name}_bce_itr_{ite_num}_train_{running_loss / ite_num4val:.4f}.pth"
+                            f"{self.config.model_name}_bce_itr_{ite_num}_train_{running_loss / max(ite_num4val, 1):.4f}.pth"
                         )
                     )
                     
@@ -474,13 +476,13 @@ class Trainer:
                 print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f\n" % (
                     epoch + 1, self.config.epoch_num, (i + 1) * self.config.batch_size_train, 
                     len(self.dataloader.dataset), ite_num, 
-                    running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy
+                    running_loss / max(ite_num4val, 1), running_tar_loss / max(ite_num4val, 1), batch_accuracy
                 ))
             
             # 计算每个epoch的平均统计数据
-            avg_epoch_loss = epoch_loss / batch_count
-            avg_epoch_tar_loss = epoch_tar_loss / batch_count
-            avg_epoch_accuracy = epoch_accuracy / batch_count
+            avg_epoch_loss = epoch_loss / max(batch_count, 1)
+            avg_epoch_tar_loss = epoch_tar_loss / max(batch_count, 1)
+            avg_epoch_accuracy = epoch_accuracy / max(batch_count, 1)
             
             # 输出epoch统计信息
             print(f"Epoch {epoch+1} Summary:")
