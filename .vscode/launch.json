@@ -50,7 +50,7 @@
             "program": "u2net_infer_multichannel.py",
             "args": [
                 "--model_path",
-                "tuotan3_saved_models_multichannel/u2net/u2net_best_accuracy_0.9380_epoch_3.pth",
+                "tuotan3_saved_models_multichannel/u2net/u2net_epoch_180_loss_0.0953.pth",
                 "--input_dir",
                 "/Volumes/data1/JH/projects/ttprocess/train_/images",
                 "--output_dir",

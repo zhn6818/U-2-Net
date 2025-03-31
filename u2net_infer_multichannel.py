@@ -8,10 +8,11 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import numpy as np
 import glob
-from skimage import io, transform, color
+from skimage import io, transform, color, filters
 from PIL import Image
 import matplotlib.pyplot as plt
 import argparse
+import scipy.ndimage as ndimage
 
 from model import U2NET
 from model import U2NETP
@@ -30,6 +31,10 @@ def get_args():
     parser.add_argument('--input_size', type=int, default=512, help='输入图像大小')
     parser.add_argument('--flag', type=int, default=0, choices=[0, 1, 2], 
                        help='颜色空间标志，0: RGB, 1: Lab, 2: RGB+Lab')
+    parser.add_argument('--boundary_thickness', type=int, default=3, 
+                       help='边界线条粗细')
+    parser.add_argument('--boundary_only', action='store_true',
+                       help='是否只输出边界图')
     return parser.parse_args()
 
 # --------- 图像预处理 ---------
@@ -388,6 +393,331 @@ def save_masks(prediction, output_prefix, num_classes, original_image=None, gt_m
         comparison_image = Image.fromarray(comparison)
         comparison_image.save(f"{output_prefix}_pred_vs_gt.png")
 
+# --------- 边界提取与可视化 ---------
+def extract_boundaries(mask, thickness=3):
+    """
+    从分割掩码中提取边界
+    
+    Args:
+        mask: 输入掩码 [H, W]
+        thickness: 边界线条的粗细
+    
+    Returns:
+        boundary: 边界图 [H, W]
+    """
+    # 二值化掩码
+    binary_mask = (mask > 0.5).astype(np.uint8)
+    
+    # 使用形态学操作提取更粗的边界
+    if thickness <= 1:
+        # 如果需要细边界，使用Sobel算子
+        grad_x = ndimage.sobel(binary_mask, axis=0)
+        grad_y = ndimage.sobel(binary_mask, axis=1)
+        boundary = np.sqrt(grad_x**2 + grad_y**2)
+        boundary = (boundary > 0).astype(np.float32)
+    else:
+        # 使用膨胀和腐蚀提取更粗的边界
+        # 先进行高斯平滑来减少噪点对边界的影响
+        smoothed = ndimage.gaussian_filter(binary_mask.astype(float), sigma=1.0)
+        smoothed_binary = (smoothed > 0.5).astype(np.uint8)
+        
+        # 使用形态学操作提取更粗的边界
+        eroded = ndimage.binary_erosion(smoothed_binary, iterations=thickness//2)
+        dilated = ndimage.binary_dilation(smoothed_binary, iterations=thickness//2)
+        boundary = dilated.astype(np.float32) - eroded.astype(np.float32)
+        
+        # 确保边界是连续的
+        if thickness > 3:
+            # 对于较粗的边界，进行额外的膨胀操作
+            boundary = ndimage.binary_dilation(boundary, iterations=1)
+    
+    # 确保边界的值在[0,1]范围内
+    boundary = (boundary > 0).astype(np.float32)
+    
+    return boundary
+
+def visualize_boundaries(prediction, output_prefix, num_classes, original_image=None, gt_masks=None, thickness=1, boundary_only=False):
+    """
+    可视化分割结果的边界，并与真实标签边界进行对比
+    
+    Args:
+        prediction: 模型预测的多通道结果
+        output_prefix: 输出文件路径前缀
+        num_classes: 分割类别数量
+        original_image: 原始图像
+        gt_masks: 真实标签掩码列表
+        thickness: 边界线条的粗细
+        boundary_only: 是否只显示边界而不显示完整掩码
+    """
+    # 定义边界颜色映射 (RGB格式)
+    boundary_colors = [
+        [255, 0, 0],     # 红色 - 类别1
+        [0, 255, 0],     # 绿色 - 类别2
+        [0, 0, 255],     # 蓝色 - 类别3
+        [255, 255, 0],   # 黄色 - 类别4
+        [255, 0, 255],   # 洋红 - 类别5
+    ]
+    
+    # 确保颜色足够
+    if num_classes > len(boundary_colors):
+        for i in range(num_classes - len(boundary_colors)):
+            boundary_colors.append([np.random.randint(0, 255), 
+                                  np.random.randint(0, 255), 
+                                  np.random.randint(0, 255)])
+    
+    # 创建画布
+    h, w = prediction[0].shape
+    # 设置每个类别的单独显示
+    fig, axes = plt.subplots(num_classes, 3, figsize=(15, 5 * num_classes))
+    
+    # 处理单类别的情况
+    if num_classes == 1:
+        axes = np.array([axes])
+    
+    # 为每个类别创建边界可视化
+    for c in range(num_classes):
+        # 提取当前类别的预测掩码和边界
+        pred_mask = prediction[c]
+        pred_boundary = extract_boundaries(pred_mask, thickness)
+        
+        # 提取当前类别的GT掩码和边界(如果有)
+        if gt_masks is not None and c < len(gt_masks):
+            gt_mask = gt_masks[c]
+            gt_boundary = extract_boundaries(gt_mask, thickness)
+        else:
+            gt_mask = None
+            gt_boundary = None
+        
+        # 创建边界可视化图像
+        if original_image is not None:
+            # 如果原图是灰度图，转换为RGB
+            if len(original_image.shape) == 2:
+                bg_image = np.stack([original_image] * 3, axis=-1)
+            else:
+                bg_image = original_image.copy()
+        else:
+            bg_image = np.zeros((h, w, 3), dtype=np.uint8)
+        
+        # 创建预测边界可视化
+        pred_vis = bg_image.copy()
+        for i in range(3):
+            pred_vis[:, :, i] = np.where(pred_boundary > 0, 
+                                         boundary_colors[c][i], 
+                                         pred_vis[:, :, i])
+        
+        # 创建GT边界可视化 (如果有GT)
+        if gt_boundary is not None:
+            gt_vis = bg_image.copy()
+            for i in range(3):
+                gt_vis[:, :, i] = np.where(gt_boundary > 0, 
+                                          boundary_colors[c][i], 
+                                          gt_vis[:, :, i])
+            
+            # 创建边界对比图 (预测边界为红色，GT边界为绿色)
+            compare_vis = bg_image.copy()
+            compare_vis[:, :, 0] = np.where(pred_boundary > 0, 255, compare_vis[:, :, 0])  # 红色
+            compare_vis[:, :, 1] = np.where(gt_boundary > 0, 255, compare_vis[:, :, 1])    # 绿色
+        else:
+            gt_vis = np.zeros_like(pred_vis)
+            compare_vis = pred_vis
+        
+        # 显示原始掩码、边界和对比图
+        axes[c, 0].imshow(pred_vis)
+        axes[c, 0].set_title(f'Class {c+1} Predicted Boundary')
+        axes[c, 0].axis('off')
+        
+        if gt_boundary is not None:
+            axes[c, 1].imshow(gt_vis)
+            axes[c, 1].set_title(f'Class {c+1} GT Boundary')
+        else:
+            axes[c, 1].imshow(np.zeros_like(pred_vis))
+            axes[c, 1].set_title(f'Class {c+1} No GT')
+        axes[c, 1].axis('off')
+        
+        axes[c, 2].imshow(compare_vis)
+        axes[c, 2].set_title(f'Class {c+1} Boundary Comparison (Red:Pred, Green:GT)')
+        axes[c, 2].axis('off')
+    
+    # 保存边界可视化图像
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_boundaries.png", bbox_inches='tight')
+    plt.close()
+    
+    # 额外创建所有类别边界的组合图
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    
+    # 组合所有预测边界
+    all_pred_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
+    all_gt_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
+    all_compare_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
+    
+    # 确保是RGB格式
+    if len(all_pred_vis.shape) == 2:
+        all_pred_vis = np.stack([all_pred_vis] * 3, axis=-1)
+        all_gt_vis = np.stack([all_gt_vis] * 3, axis=-1)
+        all_compare_vis = np.stack([all_compare_vis] * 3, axis=-1)
+    
+    # 为每个类别添加边界，使用不同颜色
+    for c in range(num_classes):
+        pred_mask = prediction[c]
+        pred_boundary = extract_boundaries(pred_mask, thickness)
+        
+        # 在组合图中添加预测边界
+        for i in range(3):
+            all_pred_vis[:, :, i] = np.where(pred_boundary > 0, 
+                                            boundary_colors[c][i], 
+                                            all_pred_vis[:, :, i])
+        
+        # 在对比图中添加预测边界
+        all_compare_vis[:, :, i] = np.where(pred_boundary > 0, 
+                                           boundary_colors[c][i], 
+                                           all_compare_vis[:, :, i])
+        
+        # 如果有GT，添加GT边界
+        if gt_masks is not None and c < len(gt_masks):
+            gt_mask = gt_masks[c]
+            gt_boundary = extract_boundaries(gt_mask, thickness)
+            
+            # 在组合图中添加GT边界
+            for i in range(3):
+                all_gt_vis[:, :, i] = np.where(gt_boundary > 0, 
+                                             boundary_colors[c][i], 
+                                             all_gt_vis[:, :, i])
+    
+    # 显示所有边界的组合图
+    axes[0].imshow(all_pred_vis)
+    axes[0].set_title('All Predicted Boundaries')
+    axes[0].axis('off')
+    
+    axes[1].imshow(all_gt_vis)
+    axes[1].set_title('All GT Boundaries')
+    axes[1].axis('off')
+    
+    axes[2].imshow(all_compare_vis)
+    axes[2].set_title('Combined Boundaries')
+    axes[2].axis('off')
+    
+    # 保存组合边界图
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_all_boundaries.png", bbox_inches='tight')
+    plt.close()
+    
+    # 单独保存类别1和类别2的边界对比图(如果至少有两个类别)
+    if num_classes >= 2:
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        
+        # 提取类别1的边界
+        pred_mask1 = prediction[0]
+        pred_boundary1 = extract_boundaries(pred_mask1, thickness)
+        
+        # 提取类别2的边界
+        pred_mask2 = prediction[1]
+        pred_boundary2 = extract_boundaries(pred_mask2, thickness)
+        
+        # 创建类别1和类别2的边界对比图
+        class_compare_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
+        if len(class_compare_vis.shape) == 2:
+            class_compare_vis = np.stack([class_compare_vis] * 3, axis=-1)
+        
+        # 类别1边界为红色
+        class_compare_vis[:, :, 0] = np.where(pred_boundary1 > 0, 255, class_compare_vis[:, :, 0])
+        
+        # 类别2边界为绿色
+        class_compare_vis[:, :, 1] = np.where(pred_boundary2 > 0, 255, class_compare_vis[:, :, 1])
+        
+        # 显示类别1和类别2的边界
+        class1_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
+        if len(class1_vis.shape) == 2:
+            class1_vis = np.stack([class1_vis] * 3, axis=-1)
+        class1_vis[:, :, 0] = np.where(pred_boundary1 > 0, 255, class1_vis[:, :, 0])
+        
+        class2_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
+        if len(class2_vis.shape) == 2:
+            class2_vis = np.stack([class2_vis] * 3, axis=-1)
+        class2_vis[:, :, 1] = np.where(pred_boundary2 > 0, 255, class2_vis[:, :, 1])
+        
+        # 显示类别1、类别2和对比图
+        axes[0].imshow(class1_vis)
+        axes[0].set_title('Class 1 Boundary (Red)')
+        axes[0].axis('off')
+        
+        axes[1].imshow(class2_vis)
+        axes[1].set_title('Class 2 Boundary (Green)')
+        axes[1].axis('off')
+        
+        axes[2].imshow(class_compare_vis)
+        axes[2].set_title('Class 1 and Class 2 Boundary Comparison')
+        axes[2].axis('off')
+        
+        # 保存类别对比图
+        plt.tight_layout()
+        plt.savefig(f"{output_prefix}_class1_class2_boundaries.png", bbox_inches='tight')
+        plt.close()
+        
+        # 如果有GT，创建预测与GT的细粒度对比图
+        if gt_masks is not None and len(gt_masks) >= 2:
+            fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+            
+            # 提取GT边界
+            gt_mask1 = gt_masks[0]
+            gt_boundary1 = extract_boundaries(gt_mask1, thickness)
+            
+            gt_mask2 = gt_masks[1]
+            gt_boundary2 = extract_boundaries(gt_mask2, thickness)
+            
+            # 创建预测vs GT的对比图
+            class1_compare = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
+            if len(class1_compare.shape) == 2:
+                class1_compare = np.stack([class1_compare] * 3, axis=-1)
+            
+            class2_compare = class1_compare.copy()
+            
+            # 类别1: 预测边界为红色，GT边界为绿色
+            class1_compare[:, :, 0] = np.where(pred_boundary1 > 0, 255, class1_compare[:, :, 0])
+            class1_compare[:, :, 1] = np.where(gt_boundary1 > 0, 255, class1_compare[:, :, 1])
+            
+            # 类别2: 预测边界为红色，GT边界为绿色
+            class2_compare[:, :, 0] = np.where(pred_boundary2 > 0, 255, class2_compare[:, :, 0])
+            class2_compare[:, :, 1] = np.where(gt_boundary2 > 0, 255, class2_compare[:, :, 1])
+            
+            # 显示类别1和类别2的预测vs GT对比
+            axes[0, 0].imshow(pred_boundary1, cmap='gray')
+            axes[0, 0].set_title('Class 1 Predicted Boundary')
+            axes[0, 0].axis('off')
+            
+            axes[0, 1].imshow(gt_boundary1, cmap='gray')
+            axes[0, 1].set_title('Class 1 GT Boundary')
+            axes[0, 1].axis('off')
+            
+            axes[1, 0].imshow(pred_boundary2, cmap='gray')
+            axes[1, 0].set_title('Class 2 Predicted Boundary')
+            axes[1, 0].axis('off')
+            
+            axes[1, 1].imshow(gt_boundary2, cmap='gray')
+            axes[1, 1].set_title('Class 2 GT Boundary')
+            axes[1, 1].axis('off')
+            
+            # 保存细粒度对比图
+            plt.tight_layout()
+            plt.savefig(f"{output_prefix}_detailed_boundaries.png", bbox_inches='tight')
+            plt.close()
+            
+            # 创建类别1和类别2的预测与GT直接对比图
+            fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+            
+            axes[0].imshow(class1_compare)
+            axes[0].set_title('Class 1 Boundary Comparison (Red:Pred, Green:GT)')
+            axes[0].axis('off')
+            
+            axes[1].imshow(class2_compare)
+            axes[1].set_title('Class 2 Boundary Comparison (Red:Pred, Green:GT)')
+            axes[1].axis('off')
+            
+            # 保存直接对比图
+            plt.tight_layout()
+            plt.savefig(f"{output_prefix}_direct_boundary_comparison.png", bbox_inches='tight')
+            plt.close()
+
 # --------- 主函数 ---------
 def main():
     # 解析命令行参数
@@ -456,13 +786,25 @@ def main():
         # 加载真实标签（如果存在）
         gt_masks = find_gt_mask(name_without_ext, args.gt_dir, args.num_classes)
         
-        # 保存可视化结果
-        output_path = os.path.join(args.output_dir, f"{name_without_ext}_visual.png")
-        visualize_results(original_image, resized_pred, output_path, args.num_classes, gt_masks)
+        # 保存标准可视化结果
+        if not args.boundary_only:
+            output_path = os.path.join(args.output_dir, f"{name_without_ext}_visual.png")
+            visualize_results(original_image, resized_pred, output_path, args.num_classes, gt_masks)
+            
+            # 保存彩色分割结果
+            output_prefix = os.path.join(args.output_dir, name_without_ext)
+            save_masks(resized_pred, output_prefix, args.num_classes, original_image, gt_masks)
         
-        # 保存彩色分割结果
+        # 保存边界可视化结果
         output_prefix = os.path.join(args.output_dir, name_without_ext)
-        save_masks(resized_pred, output_prefix, args.num_classes, original_image, gt_masks)
+        visualize_boundaries(
+            resized_pred, 
+            output_prefix, 
+            args.num_classes, 
+            original_image, 
+            gt_masks, 
+            args.boundary_thickness
+        )
         
         print(f"Processed {filename}")
     
