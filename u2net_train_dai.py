@@ -42,7 +42,7 @@ class Config:
         self.model_dir = os.path.join(os.getcwd(), 'saved_models_768', self.model_name + os.sep)
         
         # 预训练模型
-        self.pretrained_model_path = "saved_models_768/u2net/u2net_best_acc_0.9027_epoch_4.pth"
+        self.pretrained_model_path = ""
         self.start_epoch = 0  # 从哪个epoch开始训练
         
         # 训练参数

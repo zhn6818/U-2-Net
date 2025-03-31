@@ -67,7 +67,7 @@ model_name = 'u2net' #'u2netp'
 # data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
 # tra_image_dir = os.path.join('im_aug' + os.sep)
 # tra_label_dir = os.path.join('gt_aug' + os.sep)
-data_dir = "U2net_data/train_data/"
+data_dir = "U2net_data768/train_data/"
 tra_image_dir = os.path.join('im_aug' + os.sep)
 tra_label_dir = os.path.join('gt_aug' + os.sep)
 # tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
@@ -76,13 +76,13 @@ tra_label_dir = os.path.join('gt_aug' + os.sep)
 image_ext = '.jpg'
 label_ext = '.png'
 
-model_dir = os.path.join(os.getcwd(), '317_saved_models_512', model_name + os.sep)
+model_dir = os.path.join(os.getcwd(), 'saved_models_768', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
 # 添加预训练模型路径
-pretrained_model_path = os.path.join(os.getcwd(), '317_saved_models_512', model_name, 'u2net_epoch_695_loss_1.7671.pth')
+pretrained_model_path = ""
 # 从预训练模型文件名中提取起始epoch
-start_epoch = 695  # 从文件名中提取的epoch数
+start_epoch = 0  # 从文件名中提取的epoch数
 print(f"Pretrained model: {pretrained_model_path}")
 print(f"Starting from epoch: {start_epoch}")
 
@@ -118,8 +118,8 @@ salobj_dataset = SalObjDataset(
     img_name_list=tra_img_name_list,
     lbl_name_list=tra_lbl_name_list,
     transform=transforms.Compose([
-        RescaleT(512),
-        RandomCrop(460),
+        RescaleT(768),
+        RandomCrop(608),
         ToTensorLab(flag=0)]))
 salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=4)
 
