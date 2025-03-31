@@ -66,6 +66,28 @@
                 "--flag",
                 "0"
             ]
+        },
+        {
+            "name": "Python Debugger: u2net_infer_multichannel_single.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_infer_multichannel.py",
+            "args": [
+                "--model_path",
+                "tuotan3_saved_models_multichannel/u2net/u2net_epoch_180_loss_0.0953.pth",
+                "--mode",
+                "2",
+                "--input_dir",
+                "/Volumes/data1/JH/projects/ttprocess/train_/images",
+                "--output_dir",
+                "/Volumes/data1/JH/projects/ttprocess/train_/infer_single",
+                "--num_classes",
+                "3",
+                "--input_size",
+                "512",
+                "--flag",
+                "0"
+            ]
         }
     ]
 }

@@ -35,6 +35,12 @@ def get_args():
                        help='边界线条粗细')
     parser.add_argument('--boundary_only', action='store_true',
                        help='是否只输出边界图')
+    parser.add_argument('--mode', type=int, default=1, choices=[1, 2], 
+                       help='模式选择: 1=完整处理所有图像, 2=只处理前景标签可视化')
+    parser.add_argument('--single_image', type=str, default=None, 
+                       help='指定单张图像路径(如果提供，则只处理这张图像)')
+    parser.add_argument('--background_channel', type=int, default=0, 
+                       help='指定背景对应的通道索引，默认为0')
     return parser.parse_args()
 
 # --------- 图像预处理 ---------
@@ -718,6 +724,62 @@ def visualize_boundaries(prediction, output_prefix, num_classes, original_image=
             plt.savefig(f"{output_prefix}_direct_boundary_comparison.png", bbox_inches='tight')
             plt.close()
 
+# 添加新的函数: 可视化前景标签
+def visualize_foreground_labels(image, predictions, output_path, num_classes, background_channel=0):
+    """将非背景标签(除通道0外)在原图上以不同颜色可视化"""
+    # 确保图像是RGB格式
+    if len(image.shape) == 2:
+        image_rgb = np.stack([image] * 3, axis=-1)
+    else:
+        image_rgb = image.copy()
+    
+    # 创建标签掩码和纯标签图像
+    h, w = predictions[0].shape
+    pure_labels = np.zeros((h, w, 3), dtype=np.uint8)
+    overlay = image_rgb.copy()
+    
+    # 颜色列表
+    colors = [
+        (255, 0, 0),    # 红色
+        (0, 255, 0),    # 绿色
+        (0, 0, 255),    # 蓝色
+        (255, 255, 0),  # 黄色
+        (255, 0, 255),  # 洋红
+        (0, 255, 255),  # 青色
+        (255, 165, 0),  # 橙色
+        (128, 0, 128),  # 紫色
+        (255, 192, 203),# 粉色
+        (165, 42, 42)   # 棕色
+    ]
+    
+    # 为每个前景类别应用颜色
+    foreground_mask = np.zeros((h, w), dtype=bool)
+    
+    for c in range(num_classes):
+        if c == background_channel:
+            continue  # 跳过背景通道
+            
+        mask = predictions[c] > 0.5
+        if not np.any(mask):
+            continue  # 跳过没有像素的类别
+            
+        foreground_mask |= mask  # 更新前景掩码
+        color = colors[min(c, len(colors)-1)]  # 获取颜色
+        
+        # 应用颜色到覆盖图
+        for i in range(3):
+            overlay[:, :, i][mask] = overlay[:, :, i][mask] * 0.3 + color[i] * 0.7
+            
+        # 应用颜色到纯标签图
+        for i in range(3):
+            pure_labels[:, :, i][mask] = color[i]
+    
+    # 保存纯标签图像
+    Image.fromarray(pure_labels).save(os.path.splitext(output_path)[0] + "_pure_labels.png")
+    
+    # 保存覆盖图
+    Image.fromarray(overlay).save(output_path)
+
 # --------- 主函数 ---------
 def main():
     # 解析命令行参数
@@ -742,71 +804,140 @@ def main():
     )
     print(f"Model loaded from {args.model_path}")
     
-    # 获取输入图像列表
-    image_paths = []
-    for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
-        image_paths.extend(glob.glob(os.path.join(args.input_dir, f'*{ext}')))
+    # 根据模式选择处理方式
+    if args.mode == 1:
+        # 模式1: 完整处理所有图像
+        # 获取输入图像列表
+        image_paths = []
+        for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+            found_paths = glob.glob(os.path.join(args.input_dir, f'*{ext}'))
+            # 确保找到的路径是文件而不是目录
+            for path in found_paths:
+                if os.path.isfile(path):
+                    image_paths.append(path)
+        
+        print(f"Found {len(image_paths)} images")
+        image_paths.sort()
+        
+        if len(image_paths) == 0:
+            raise ValueError(f"No valid image files found in {args.input_dir}")
+            
+        # 处理每个图像
+        for i, image_path in enumerate(image_paths):
+            try:
+                # 获取文件名
+                filename = os.path.basename(image_path)
+                name_without_ext = os.path.splitext(filename)[0]
+                
+                # 读取图像
+                original_image = io.imread(image_path)
+                
+                # 预处理图像 - 使用与训练阶段相同的MultiChannelToTensorLab
+                input_image = transform_image(
+                    original_image, 
+                    args.input_size, 
+                    args.flag, 
+                    args.num_classes
+                )
+                
+                # 推理
+                prediction = predict(net, input_image, device)
+                
+                # 将预测结果调整为原始图像大小
+                resized_pred = []
+                for c in range(args.num_classes):
+                    channel_pred = prediction[c]
+                    resized_channel = transform.resize(
+                        channel_pred, 
+                        (original_image.shape[0], original_image.shape[1]), 
+                        mode='constant'
+                    )
+                    resized_pred.append(resized_channel)
+                
+                # 加载真实标签（如果存在）
+                gt_masks = find_gt_mask(name_without_ext, args.gt_dir, args.num_classes)
+                
+                # 保存标准可视化结果
+                if not args.boundary_only:
+                    output_path = os.path.join(args.output_dir, f"{name_without_ext}_visual.png")
+                    visualize_results(original_image, resized_pred, output_path, args.num_classes, gt_masks)
+                    
+                    # 保存彩色分割结果
+                    output_prefix = os.path.join(args.output_dir, name_without_ext)
+                    save_masks(resized_pred, output_prefix, args.num_classes, original_image, gt_masks)
+                
+                # 保存边界可视化结果
+                output_prefix = os.path.join(args.output_dir, name_without_ext)
+                visualize_boundaries(
+                    resized_pred, 
+                    output_prefix, 
+                    args.num_classes, 
+                    original_image, 
+                    gt_masks, 
+                    args.boundary_thickness
+                )
+                
+                print(f"Processed {filename}")
+            except Exception as e:
+                print(f"Error processing {image_path}: {str(e)}")
+                continue
     
-    print(f"Found {len(image_paths)} images")
-    image_paths.sort()
-    # 处理每个图像
-    for i, image_path in enumerate(image_paths):
-        if i < 90:
-            continue
+    elif args.mode == 2:
+        # 模式2: 处理前景标签可视化
+        # 获取图像路径
+        image_paths = []
+        if args.single_image is not None:
+            if not os.path.exists(args.single_image):
+                raise ValueError(f"Input image not found: {args.single_image}")
+            image_paths = [args.single_image]
+        else:
+            # 从输入目录获取所有图像
+            for ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+                found_paths = glob.glob(os.path.join(args.input_dir, f'*{ext}'))
+                for path in found_paths:
+                    if os.path.isfile(path):
+                        image_paths.append(path)
             
-        # 获取文件名
-        filename = os.path.basename(image_path)
-        name_without_ext = os.path.splitext(filename)[0]
+            if len(image_paths) == 0:
+                raise ValueError(f"No valid image files found in {args.input_dir}")
         
-        # 读取图像
-        original_image = io.imread(image_path)
+        print(f"Found {len(image_paths)} images to process")
         
-        # 预处理图像 - 使用与训练阶段相同的MultiChannelToTensorLab
-        input_image = transform_image(
-            original_image, 
-            args.input_size, 
-            args.flag, 
-            args.num_classes
-        )
+        # 处理每个图像
+        for image_path in image_paths:
+            try:
+                # 获取文件名
+                filename = os.path.basename(image_path)
+                name_without_ext = os.path.splitext(filename)[0]
+                
+                # 读取并处理图像
+                print(f"Processing: {filename}")
+                original_image = io.imread(image_path)
+                input_tensor = transform_image(original_image, args.input_size, args.flag, args.num_classes)
+                prediction = predict(net, input_tensor, device)
+                
+                # 调整预测结果为原始图像大小
+                resized_pred = []
+                for c in range(args.num_classes):
+                    resized_channel = transform.resize(
+                        prediction[c], 
+                        (original_image.shape[0], original_image.shape[1]), 
+                        mode='constant'
+                    )
+                    resized_pred.append(resized_channel)
+                
+                # 可视化前景标签
+                output_path = os.path.join(args.output_dir, f"{name_without_ext}_foreground_labels.png")
+                visualize_foreground_labels(original_image, resized_pred, output_path, args.num_classes)
+                
+            except Exception as e:
+                print(f"Error processing {image_path}: {str(e)}")
+                continue
         
-        # 推理
-        prediction = predict(net, input_image, device)
-        
-        # 将预测结果调整为原始图像大小
-        resized_pred = []
-        for c in range(args.num_classes):
-            channel_pred = prediction[c]
-            resized_channel = transform.resize(
-                channel_pred, 
-                (original_image.shape[0], original_image.shape[1]), 
-                mode='constant'
-            )
-            resized_pred.append(resized_channel)
-        
-        # 加载真实标签（如果存在）
-        gt_masks = find_gt_mask(name_without_ext, args.gt_dir, args.num_classes)
-        
-        # 保存标准可视化结果
-        if not args.boundary_only:
-            output_path = os.path.join(args.output_dir, f"{name_without_ext}_visual.png")
-            visualize_results(original_image, resized_pred, output_path, args.num_classes, gt_masks)
-            
-            # 保存彩色分割结果
-            output_prefix = os.path.join(args.output_dir, name_without_ext)
-            save_masks(resized_pred, output_prefix, args.num_classes, original_image, gt_masks)
-        
-        # 保存边界可视化结果
-        output_prefix = os.path.join(args.output_dir, name_without_ext)
-        visualize_boundaries(
-            resized_pred, 
-            output_prefix, 
-            args.num_classes, 
-            original_image, 
-            gt_masks, 
-            args.boundary_thickness
-        )
-        
-        print(f"Processed {filename}")
+        print(f"前景标签可视化完成! 共处理 {len(image_paths)} 张图像。")
+    
+    else:
+        raise ValueError(f"Unknown mode: {args.mode}")
     
     print("推理完成! 结果保存在:", args.output_dir)
 
