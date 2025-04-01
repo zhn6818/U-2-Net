@@ -47,7 +47,7 @@ class Config:
         
         # 训练参数
         self.epoch_num = 100000
-        self.batch_size_train = 1
+        self.batch_size_train = 4
         self.batch_size_val = 1
         self.save_freq = 2000  # 保存模型的频率
         
@@ -132,13 +132,20 @@ class DatasetPreparation:
             img_name_list=img_name_list,
             lbl_name_list=lbl_name_list,
             transform=transforms.Compose([
-                RescaleT(768),
-                # RandomCrop(460),
-                RandomSizedCrop(512, 768),
+                RescaleT(768),  # 直接使用固定大小 512x512
+                RandomCrop(608),
+                # RandomSizedCrop(512, 768),  # 移除这行，它会产生不同尺寸的图像
+                # RescaleT(512),
                 ToTensorLab(flag=0)
             ])
         )
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=4)
+        dataloader = DataLoader(
+            dataset, 
+            batch_size=batch_size, 
+            shuffle=shuffle, 
+            num_workers=4,
+            # collate_fn=self.custom_collate_fn  # 移除自定义collate函数，使用默认的
+        )
         return dataloader
 
 # --------- 3. 模型定义 ---------
