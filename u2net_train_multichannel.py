@@ -34,17 +34,17 @@ class Config:
         self.model_name = 'u2net'  # 'u2netp'
         
         # 数据路径
-        self.data_dir = "/data1/zhn/train_/"
-        self.tra_image_dir = os.path.join('images' + os.sep)
+        self.data_dir = "/Volumes/data1/JH/projects/JZ_process/train/"
+        self.tra_image_dir = os.path.join('imgs' + os.sep)
         self.tra_label_dir = os.path.join('masks' + os.sep)
         self.image_ext = '.jpg'
         self.label_ext = '.png'
         
         # 模型保存路径
-        self.model_dir = os.path.join(os.getcwd(), 'tuotan3_saved_models_multichannel', self.model_name + os.sep)
+        self.model_dir = os.path.join(os.getcwd(), 'JZ_saved_models_multichannel', self.model_name + os.sep)
         
         # 预训练模型 - 如果使用预训练的单通道模型，这里设置路径
-        self.pretrained_model_path = "tuotan3_saved_models_multichannel/u2net/u2net_best_accuracy_0.9380_epoch_3.pth"
+        self.pretrained_model_path = ""
         self.start_epoch = 0  # 从哪个epoch开始训练
         
         # 训练参数
@@ -54,9 +54,10 @@ class Config:
         self.save_freq = 2000  # 保存模型的频率
         
         # 分割通道数量
-        self.num_classes = 3  # 分割的类别数（通道数）
+        self.num_classes = 7  # 分割的类别数（通道数）
         
         # 边界损失参数
+        self.use_boundary_loss = True  # 是否使用边界损失
         self.boundary_weight = 0.5  # 边界损失的权重
         
         # 优化器参数
@@ -210,13 +211,14 @@ class LossFunctions:
         
         return boundary_loss
         
-    def muti_bce_loss_fusion(self, d0, d1, d2, d3, d4, d5, d6, labels_v, boundary_weight=0.5):
+    def muti_bce_loss_fusion(self, d0, d1, d2, d3, d4, d5, d6, labels_v, boundary_weight=0.5, use_boundary_loss=True):
         """
         计算多级输出的BCE损失，支持多通道，并添加边界损失
         Args:
             d0-d6: 模型各级输出
             labels_v: 真实标签
             boundary_weight: 边界损失的权重
+            use_boundary_loss: 是否使用边界损失
         """
         # 对每个输出通道分别计算BCE损失
         loss0 = self.bce_loss(d0, labels_v)
@@ -230,21 +232,30 @@ class LossFunctions:
         # 计算基础BCE损失
         bce_loss = loss0 + loss1 + loss2 + loss3 + loss4 + loss5 + loss6
         
-        # 计算边界损失 (仅对主输出d0计算)
-        boundary_loss = self.compute_boundary_loss(d0, labels_v)
+        # 总损失初始化为BCE损失
+        total_loss = bce_loss
         
-        # 总损失 = BCE损失 + 边界损失*权重
-        total_loss = bce_loss + boundary_weight * boundary_loss
+        # 如果启用了边界损失，则计算并添加到总损失中
+        boundary_loss_value = 0.0
+        if use_boundary_loss:
+            # 计算边界损失 (仅对主输出d0计算)
+            boundary_loss = self.compute_boundary_loss(d0, labels_v)
+            boundary_loss_value = boundary_loss.data.item()
+            
+            # 将边界损失添加到总损失中
+            total_loss = bce_loss + boundary_weight * boundary_loss
         
         # 输出损失信息
-        print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f, boundary: %3f"%(
-            loss0.data.item(), loss1.data.item(), loss2.data.item(), 
-            loss3.data.item(), loss4.data.item(), loss5.data.item(), 
-            loss6.data.item(), boundary_loss.data.item()))
-        
-        # 输出通道信息
-        # num_channels = d0.shape[1]
-        # print(f"处理了 {num_channels} 个通道，其中 {num_channels-1} 个前景通道的边界损失被计算")
+        if use_boundary_loss:
+            print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f, boundary: %3f"%(
+                loss0.data.item(), loss1.data.item(), loss2.data.item(), 
+                loss3.data.item(), loss4.data.item(), loss5.data.item(), 
+                loss6.data.item(), boundary_loss_value))
+        else:
+            print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f"%(
+                loss0.data.item(), loss1.data.item(), loss2.data.item(), 
+                loss3.data.item(), loss4.data.item(), loss5.data.item(), 
+                loss6.data.item()))
         
         return loss0, total_loss
     
@@ -302,7 +313,7 @@ class DatasetPreparation:
             img_name_list=img_name_list,
             lbl_name_list=lbl_name_list,
             transform=transforms.Compose([
-                RescaleT(512),
+                RescaleT(1024),
                 # RandomCrop(460),
                 MultiChannelToTensorLab(flag=0, num_channels=self.config.num_classes)
             ]),
@@ -398,11 +409,15 @@ class Trainer:
         self.device = device
         self.best_accuracy = 0.0
         self.boundary_weight = getattr(config, 'boundary_weight', 0.5)  # 从配置获取边界损失权重，默认0.5
+        self.use_boundary_loss = getattr(config, 'use_boundary_loss', True)  # 从配置获取是否使用边界损失，默认True
         
     def train(self):
         """训练模型"""
         print("---start training...")
-        print(f"Using boundary loss with weight: {self.boundary_weight}")
+        if self.use_boundary_loss:
+            print(f"Using boundary loss with weight: {self.boundary_weight}")
+        else:
+            print("Boundary loss is disabled")
         ite_num = 0
         running_loss = 0.0
         running_tar_loss = 0.0
@@ -431,7 +446,10 @@ class Trainer:
                 
                 # 前向传播、计算损失、反向传播、优化
                 d0, d1, d2, d3, d4, d5, d6 = self.model(inputs_v)
-                loss2, loss = self.loss_funcs.muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v, self.boundary_weight)
+                loss2, loss = self.loss_funcs.muti_bce_loss_fusion(
+                    d0, d1, d2, d3, d4, d5, d6, labels_v, 
+                    self.boundary_weight, self.use_boundary_loss
+                )
                 
                 # 计算评价指标
                 batch_accuracy = self.loss_funcs.calculate_multichannel_accuracy(d0, labels_v)
@@ -458,11 +476,12 @@ class Trainer:
                     )
                     
                     # 保存边界可视化（在删除变量之前）
-                    vis_path = os.path.join(
-                        self.config.model_dir, 
-                        f"boundaries_itr_{ite_num}.png"
-                    )
-                    self.loss_funcs.visualize_boundaries(d0.detach(), labels_v.detach(), save_path=vis_path)
+                    if self.use_boundary_loss:
+                        vis_path = os.path.join(
+                            self.config.model_dir, 
+                            f"boundaries_itr_{ite_num}.png"
+                        )
+                        self.loss_funcs.visualize_boundaries(d0.detach(), labels_v.detach(), save_path=vis_path)
                     
                     running_loss = 0.0
                     running_tar_loss = 0.0
@@ -512,11 +531,12 @@ class Trainer:
                     d0, _, _, _, _, _, _ = self.model(inputs_v)
                     
                     # 保存边界可视化
-                    vis_path = os.path.join(
-                        self.config.model_dir, 
-                        f"boundaries_epoch_{epoch+1}.png"
-                    )
-                    self.loss_funcs.visualize_boundaries(d0, labels_v, save_path=vis_path)
+                    if self.use_boundary_loss:
+                        vis_path = os.path.join(
+                            self.config.model_dir, 
+                            f"boundaries_epoch_{epoch+1}.png"
+                        )
+                        self.loss_funcs.visualize_boundaries(d0, labels_v, save_path=vis_path)
                 self.model.train()  # 恢复训练模式
             
             # 保存最佳模型
@@ -533,6 +553,9 @@ class Trainer:
 def main():
     # 初始化配置
     config = Config()
+    
+    # 如果不想使用边界损失，可以在这里设置
+    config.use_boundary_loss = False
     
     # 确保模型保存目录存在
     if not os.path.exists(config.model_dir):
