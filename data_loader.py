@@ -159,7 +159,12 @@ class ToTensor(object):
 		tmpImg = np.zeros((image.shape[0],image.shape[1],3))
 		tmpLbl = np.zeros(label.shape)
 
-		image = image/np.max(image)
+		max_val = np.max(image)
+		if max_val > 1e-8:
+			image = image / max_val
+		else:
+			image = image
+
 		if(np.max(label)<1e-6):
 			label = label
 		else:
@@ -192,6 +197,12 @@ class ToTensorLab(object):
 		imidx, image, label =sample['imidx'], sample['image'], sample['label']
 
 		tmpLbl = np.zeros(label.shape)
+
+		max_val = np.max(image)
+		if max_val > 1e-8:
+			image = image / max_val
+		else:
+			image = image
 
 		if(np.max(label)<1e-6):
 			label = label
@@ -251,7 +262,11 @@ class ToTensorLab(object):
 
 		else: # with rgb color
 			tmpImg = np.zeros((image.shape[0],image.shape[1],3))
-			image = image/np.max(image)
+			max_val = np.max(image)
+			if max_val > 1e-8:
+				image = image / max_val
+			else:
+				image = image
 			if image.shape[2]==1:
 				tmpImg[:,:,0] = (image[:,:,0]-0.485)/0.229
 				tmpImg[:,:,1] = (image[:,:,0]-0.485)/0.229
@@ -400,15 +415,19 @@ class MultiChannelToTensorLab(object):
 
         else:  # with rgb color
             tmpImg = np.zeros((image.shape[0], image.shape[1], 3))
-            image = image / np.max(image)
-            if image.shape[2] == 1:
-                tmpImg[:,:,0] = (image[:,:,0] - 0.485) / 0.229
-                tmpImg[:,:,1] = (image[:,:,0] - 0.485) / 0.229
-                tmpImg[:,:,2] = (image[:,:,0] - 0.485) / 0.229
+            max_val = np.max(image)
+            if max_val > 1e-8:
+                image = image / max_val
             else:
-                tmpImg[:,:,0] = (image[:,:,0] - 0.485) / 0.229
-                tmpImg[:,:,1] = (image[:,:,1] - 0.456) / 0.224
-                tmpImg[:,:,2] = (image[:,:,2] - 0.406) / 0.225
+                image = image
+            if image.shape[2] == 1:
+                tmpImg[:,:,0] = (image[:,:,0]-0.485)/0.229
+                tmpImg[:,:,1] = (image[:,:,0]-0.485)/0.229
+                tmpImg[:,:,2] = (image[:,:,0]-0.485)/0.229
+            else:
+                tmpImg[:,:,0] = (image[:,:,0]-0.485)/0.229
+                tmpImg[:,:,1] = (image[:,:,1]-0.456)/0.224
+                tmpImg[:,:,2] = (image[:,:,2]-0.406)/0.225
 
         # 转置后返回
         tmpImg = tmpImg.transpose((2, 0, 1))
