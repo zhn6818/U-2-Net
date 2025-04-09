@@ -41,7 +41,7 @@ class Config:
         self.label_ext = '.png'
         
         # 模型保存路径
-        self.model_dir = os.path.join(os.getcwd(), 'JZ_saved_models_multichannel', self.model_name + os.sep)
+        self.model_dir = os.path.join(os.getcwd(), 'JZ_saved_models_multichannel_512', self.model_name + os.sep)
         
         # 预训练模型 - 如果使用预训练的单通道模型，这里设置路径
         self.pretrained_model_path = ""
@@ -313,7 +313,7 @@ class DatasetPreparation:
             img_name_list=img_name_list,
             lbl_name_list=lbl_name_list,
             transform=transforms.Compose([
-                RescaleT(1024),
+                RescaleT(512),
                 # RandomCrop(460),
                 MultiChannelToTensorLab(flag=0, num_channels=self.config.num_classes)
             ]),
