@@ -34,7 +34,7 @@ class Config:
         self.model_name = 'u2net'  # 'u2netp'
         
         # 数据路径
-        self.data_dir = "/Volumes/data1/JH/projects/JZ_process/train/"
+        self.data_dir = "/data1/zhn/JZ/train_512/"
         self.tra_image_dir = os.path.join('imgs' + os.sep)
         self.tra_label_dir = os.path.join('masks' + os.sep)
         self.image_ext = '.jpg'
