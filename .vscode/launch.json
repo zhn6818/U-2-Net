@@ -88,6 +88,30 @@
                 "--flag",
                 "0"
             ]
-        }
+        },
+        {
+            "name": "Python Debugger: u2net_infer_JZ",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_infer_multichannel.py",
+            "args": [
+                "--model_path",
+                "JZ_saved_models_multichannel_512/u2net/u2net_bce_itr_5_train_1.0908.pth",
+                "--input_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train_512/imgs",
+                "--output_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train_512/infer",
+                "--gt_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train_512/masks",
+                "--model_name",
+                "u2net",
+                "--num_classes",
+                "8",
+                "--input_size",
+                "512",
+                "--flag",
+                "0"
+            ]
+        },
     ]
 }

@@ -55,7 +55,7 @@ class Config:
         self.save_freq = 2000  # 保存模型的频率
         
         # 分割通道数量
-        self.num_classes = 7  # 分割的类别数（通道数）
+        self.num_classes = 8  # 分割的类别数（通道数）
         
         # 边界损失参数
         self.use_boundary_loss = True  # 是否使用边界损失

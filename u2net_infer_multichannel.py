@@ -462,6 +462,11 @@ def visualize_boundaries(prediction, output_prefix, num_classes, original_image=
         [0, 0, 255],     # 蓝色 - 类别3
         [255, 255, 0],   # 黄色 - 类别4
         [255, 0, 255],   # 洋红 - 类别5
+        [0, 255, 255],   # 青色 - 类别6
+        [255, 165, 0],   # 橙色 - 类别7
+        [128, 0, 128],   # 紫色 - 类别8
+        [255, 192, 203], # 粉色 - 类别9
+        [165, 42, 42]    # 棕色 - 类别10
     ]
     
     # 确保颜色足够
@@ -607,122 +612,6 @@ def visualize_boundaries(prediction, output_prefix, num_classes, original_image=
     plt.tight_layout()
     plt.savefig(f"{output_prefix}_all_boundaries.png", bbox_inches='tight')
     plt.close()
-    
-    # 单独保存类别1和类别2的边界对比图(如果至少有两个类别)
-    if num_classes >= 2:
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # 提取类别1的边界
-        pred_mask1 = prediction[0]
-        pred_boundary1 = extract_boundaries(pred_mask1, thickness)
-        
-        # 提取类别2的边界
-        pred_mask2 = prediction[1]
-        pred_boundary2 = extract_boundaries(pred_mask2, thickness)
-        
-        # 创建类别1和类别2的边界对比图
-        class_compare_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
-        if len(class_compare_vis.shape) == 2:
-            class_compare_vis = np.stack([class_compare_vis] * 3, axis=-1)
-        
-        # 类别1边界为红色
-        class_compare_vis[:, :, 0] = np.where(pred_boundary1 > 0, 255, class_compare_vis[:, :, 0])
-        
-        # 类别2边界为绿色
-        class_compare_vis[:, :, 1] = np.where(pred_boundary2 > 0, 255, class_compare_vis[:, :, 1])
-        
-        # 显示类别1和类别2的边界
-        class1_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
-        if len(class1_vis.shape) == 2:
-            class1_vis = np.stack([class1_vis] * 3, axis=-1)
-        class1_vis[:, :, 0] = np.where(pred_boundary1 > 0, 255, class1_vis[:, :, 0])
-        
-        class2_vis = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
-        if len(class2_vis.shape) == 2:
-            class2_vis = np.stack([class2_vis] * 3, axis=-1)
-        class2_vis[:, :, 1] = np.where(pred_boundary2 > 0, 255, class2_vis[:, :, 1])
-        
-        # 显示类别1、类别2和对比图
-        axes[0].imshow(class1_vis)
-        axes[0].set_title('Class 1 Boundary (Red)')
-        axes[0].axis('off')
-        
-        axes[1].imshow(class2_vis)
-        axes[1].set_title('Class 2 Boundary (Green)')
-        axes[1].axis('off')
-        
-        axes[2].imshow(class_compare_vis)
-        axes[2].set_title('Class 1 and Class 2 Boundary Comparison')
-        axes[2].axis('off')
-        
-        # 保存类别对比图
-        plt.tight_layout()
-        plt.savefig(f"{output_prefix}_class1_class2_boundaries.png", bbox_inches='tight')
-        plt.close()
-        
-        # 如果有GT，创建预测与GT的细粒度对比图
-        if gt_masks is not None and len(gt_masks) >= 2:
-            fig, axes = plt.subplots(2, 2, figsize=(10, 10))
-            
-            # 提取GT边界
-            gt_mask1 = gt_masks[0]
-            gt_boundary1 = extract_boundaries(gt_mask1, thickness)
-            
-            gt_mask2 = gt_masks[1]
-            gt_boundary2 = extract_boundaries(gt_mask2, thickness)
-            
-            # 创建预测vs GT的对比图
-            class1_compare = original_image.copy() if original_image is not None else np.zeros((h, w, 3), dtype=np.uint8)
-            if len(class1_compare.shape) == 2:
-                class1_compare = np.stack([class1_compare] * 3, axis=-1)
-            
-            class2_compare = class1_compare.copy()
-            
-            # 类别1: 预测边界为红色，GT边界为绿色
-            class1_compare[:, :, 0] = np.where(pred_boundary1 > 0, 255, class1_compare[:, :, 0])
-            class1_compare[:, :, 1] = np.where(gt_boundary1 > 0, 255, class1_compare[:, :, 1])
-            
-            # 类别2: 预测边界为红色，GT边界为绿色
-            class2_compare[:, :, 0] = np.where(pred_boundary2 > 0, 255, class2_compare[:, :, 0])
-            class2_compare[:, :, 1] = np.where(gt_boundary2 > 0, 255, class2_compare[:, :, 1])
-            
-            # 显示类别1和类别2的预测vs GT对比
-            axes[0, 0].imshow(pred_boundary1, cmap='gray')
-            axes[0, 0].set_title('Class 1 Predicted Boundary')
-            axes[0, 0].axis('off')
-            
-            axes[0, 1].imshow(gt_boundary1, cmap='gray')
-            axes[0, 1].set_title('Class 1 GT Boundary')
-            axes[0, 1].axis('off')
-            
-            axes[1, 0].imshow(pred_boundary2, cmap='gray')
-            axes[1, 0].set_title('Class 2 Predicted Boundary')
-            axes[1, 0].axis('off')
-            
-            axes[1, 1].imshow(gt_boundary2, cmap='gray')
-            axes[1, 1].set_title('Class 2 GT Boundary')
-            axes[1, 1].axis('off')
-            
-            # 保存细粒度对比图
-            plt.tight_layout()
-            plt.savefig(f"{output_prefix}_detailed_boundaries.png", bbox_inches='tight')
-            plt.close()
-            
-            # 创建类别1和类别2的预测与GT直接对比图
-            fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-            
-            axes[0].imshow(class1_compare)
-            axes[0].set_title('Class 1 Boundary Comparison (Red:Pred, Green:GT)')
-            axes[0].axis('off')
-            
-            axes[1].imshow(class2_compare)
-            axes[1].set_title('Class 2 Boundary Comparison (Red:Pred, Green:GT)')
-            axes[1].axis('off')
-            
-            # 保存直接对比图
-            plt.tight_layout()
-            plt.savefig(f"{output_prefix}_direct_boundary_comparison.png", bbox_inches='tight')
-            plt.close()
 
 # 添加新的函数: 可视化前景标签
 def visualize_foreground_labels(image, predictions, output_path, num_classes, background_channel=0):
