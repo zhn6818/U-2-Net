@@ -24,6 +24,22 @@ USE_SYNC_BN=""
 BOUNDARY_LOSS=""
 BOUNDARY_WEIGHT=0.5
 
+# 设置默认预训练权重路径 - 可以根据实际情况修改
+# 单通道的预训练模型路径 (需按实际路径修改)
+DEFAULT_PRETRAINED="./saved_models/u2net/u2net.pth"
+# 如果是微调多通道模型，则使用下面的路径 (需按实际路径修改)
+# DEFAULT_PRETRAINED="./JZ_saved_models_multichannel_512/u2net/u2net_best_accuracy_0.xxxx_epoch_xx.pth"
+
+# 如果默认预训练模型存在，则使用它
+if [ -f "$DEFAULT_PRETRAINED" ]; then
+    PRETRAINED="--pretrained $DEFAULT_PRETRAINED"
+    echo "将使用默认预训练模型: $DEFAULT_PRETRAINED"
+else
+    PRETRAINED=""
+    echo "默认预训练模型不存在: $DEFAULT_PRETRAINED"
+    echo "将从头开始训练模型"
+fi
+
 # 解析命令行参数
 while [[ $# -gt 0 ]]; do
     key="$1"
@@ -65,7 +81,9 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --pretrained)
+            # 命令行参数会覆盖默认预训练模型
             PRETRAINED="--pretrained $2"
+            echo "将使用指定的预训练模型: $2"
             shift 2
             ;;
         *)
