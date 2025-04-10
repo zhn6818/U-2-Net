@@ -89,8 +89,11 @@ class LossFunctions:
         pred = pred[0].detach().cpu().numpy()  # [C, H, W]
         target = target[0].detach().cpu().numpy()  # [C, H, W]
         
-        num_channels = min(pred.shape[0], 3)  # 最多显示3个通道
-        fig, axes = plt.subplots(num_channels, 3, figsize=(12, 4*num_channels))
+        # 显示所有通道，不再限制为最多3个
+        num_channels = pred.shape[0]
+        
+        # 创建足够大的图表以容纳所有通道
+        fig, axes = plt.subplots(num_channels, 3, figsize=(15, 4 * num_channels))
         
         # 如果只有一个通道，确保axes是二维的
         if num_channels == 1:
