@@ -4,7 +4,6 @@
     // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-    
         {
             "name": "Python Debugger: Current File",
             "type": "debugpy",
@@ -96,7 +95,7 @@
             "program": "u2net_infer_multichannel.py",
             "args": [
                 "--model_path",
-                "JZ_saved_models_multichannel_512/u2net/u2net_bce_itr_5_train_1.0908.pth",
+                "JZ_saved_models_multichannel_512/u2net/u2net_bce_itr_14000_train_0.0088.pth",
                 "--input_dir",
                 "/Volumes/data1/JH/projects/JZ_process/train_512/imgs",
                 "--output_dir",
@@ -113,5 +112,34 @@
                 "0"
             ]
         },
+        {
+            "name": "inferJZ",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_multichannel_visualize.py",
+            "args": [
+                "--model_path",
+                "JZ_saved_models_multichannel_512/u2net/u2net_bce_itr_56000_train_0.0069.pth",
+                "--input_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train_512/imgs",
+                "--output_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train_512/visualization",
+                "--gt_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train_512/masks",
+                "--num_classes",
+                "8",
+                "--input_size",
+                "512",
+                "--alpha",
+                "0.7",
+                "--model_name",
+                "u2net",
+                "--flag",
+                "0",
+                "--device",
+                "auto"
+            ],
+            "console": "integratedTerminal"
+        }
     ]
 }
