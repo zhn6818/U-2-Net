@@ -119,17 +119,17 @@
             "program": "u2net_multichannel_visualize.py",
             "args": [
                 "--model_path",
-                "JZ_saved_models_multichannel_512/u2net/u2net_bce_itr_56000_train_0.0069.pth",
+                "JZ_saved_models_multichannel_512/u2net/u2net_bce_itr_76000_train_0.0088.pth",
                 "--input_dir",
-                "/Volumes/data1/JH/projects/JZ_process/train_512/imgs",
+                "/Volumes/data1/JH/projects/JZ_process/train/imgs",
                 "--output_dir",
-                "/Volumes/data1/JH/projects/JZ_process/train_512/visualization",
+                "/Volumes/data1/JH/projects/JZ_process/train/visualization",
                 "--gt_dir",
-                "/Volumes/data1/JH/projects/JZ_process/train_512/masks",
+                "/Volumes/data1/JH/projects/JZ_process/train/masks",
                 "--num_classes",
                 "8",
                 "--input_size",
-                "512",
+                "2048",
                 "--alpha",
                 "0.7",
                 "--model_name",
@@ -140,6 +140,25 @@
                 "auto"
             ],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: u2net_model_evaluator.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_model_evaluator.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--input_image",
+                "/Volumes/data1/JH/projects/JZ_process/train/imgs/20240716155345410.jpg",
+                "--models_dir",
+                "JZ_saved_models_multichannel_512/u2net/",
+                "--gt_mask",
+                "/Volumes/data1/JH/projects/JZ_process/train/masks/20240716155345410.png",
+                "--num_classes",
+                "8",
+                "--input_size",
+                "1024"
+            ]
         }
     ]
 }
