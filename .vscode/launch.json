@@ -159,6 +159,37 @@
                 "--input_size",
                 "1024"
             ]
-        }
+        },
+        {
+            "name": "inferJZ_flexible",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "u2net_multichannel_visualize_flexible.py",
+            "args": [
+                "--model_path",
+                "JZ_saved_models_multichannel_512/u2net/u2net_bce_itr_76000_train_0.0088.pth",
+                "--input_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train/imgs",
+                "--output_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train/visualization",
+                "--gt_dir",
+                "/Volumes/data1/JH/projects/JZ_process/train/masks",
+                "--num_classes",
+                "8",
+                "--class_names",
+                "BG,A,B,C,D,DS,TIB,TID",
+                "--input_size",
+                "2048",
+                "--alpha",
+                "0.7",
+                "--model_name",
+                "u2net",
+                "--flag",
+                "0",
+                "--device",
+                "auto"
+            ],
+            "console": "integratedTerminal"
+        },
     ]
 }
