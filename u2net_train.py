@@ -10,6 +10,7 @@ from torchvision import transforms, utils
 import torch.optim as optim
 import torchvision.transforms as standard_transforms
 
+
 import numpy as np
 import glob
 import os
@@ -20,6 +21,8 @@ from data_loader import RandomCrop
 from data_loader import ToTensor
 from data_loader import ToTensorLab
 from data_loader import SalObjDataset
+from data_loader import ColorJitter
+from data_loader import RandomMaxFilter
 
 from model import U2NET
 from model import U2NETP
@@ -108,6 +111,19 @@ salobj_dataset = SalObjDataset(
     lbl_name_list=tra_lbl_name_list,
     transform=transforms.Compose([
         RescaleT(512),
+        ColorJitter(
+            brightness=0.5, 
+            contrast=0.5, 
+            saturation=0.6, 
+            hue=0.2,
+            apply_prob=0.5  # 显式设置应用概率为0.5
+        ),
+        RandomMaxFilter(
+            num_regions=10,            # 处理区域数量
+            kernel_size_range=(5, 15), # 滤波核大小范围
+            threshold=0.2,             # 标签像素阈值
+            apply_prob=0.5,            # 设置为0.5的概率应用
+        ),
         ToTensorLab(flag=0)]))
 salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=2)
 

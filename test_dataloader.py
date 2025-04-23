@@ -59,7 +59,13 @@ def test_color_jitter_single_image():
     }
     
     # 创建ColorJitter实例
-    color_jitter = ColorJitter(brightness=0.5, contrast=0.5, saturation=0.6, hue=0.2)
+    color_jitter = ColorJitter(
+        brightness=0.5, 
+        contrast=0.5, 
+        saturation=0.6, 
+        hue=0.2,
+        apply_prob=1.0  # 为了测试目的设置为100%应用
+    )
     
     # 应用颜色抖动增强
     jittered_samples = []
@@ -139,7 +145,13 @@ def test_dataloader():
         lbl_name_list=tra_lbl_name_list[:5],
         transform=transforms.Compose([
             RescaleT(512), 
-            ColorJitter(brightness=0.5, contrast=0.5, saturation=0.6, hue=0.2),
+            ColorJitter(
+                brightness=0.5, 
+                contrast=0.5, 
+                saturation=0.6, 
+                hue=0.2,
+                apply_prob=1.0  # 为了测试目的设置为100%应用
+            ),
             ToTensorLab(flag=0)
         ])
     )
