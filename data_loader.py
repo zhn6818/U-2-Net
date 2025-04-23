@@ -9,7 +9,7 @@ import math
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 #==========================dataset load==========================
 class RescaleT(object):
@@ -148,6 +148,72 @@ class RandomSizedCrop(object):
 		
 		return {'imidx': imidx, 'image': image, 'label': label}
 
+class ColorJitter(object):
+    """
+    颜色抖动数据增强
+    随机调整图像的亮度、对比度、饱和度和色调，保持标签不变
+    
+    Args:
+        brightness (float or tuple): 亮度调整的范围，如0.8表示在[0.8, 1.2]范围内调整
+        contrast (float or tuple): 对比度调整的范围
+        saturation (float or tuple): 饱和度调整的范围
+        hue (float or tuple): 色调调整的范围，通常在[-0.1, 0.1]之间
+    """
+    def __init__(self, brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1):
+        self.brightness = brightness
+        self.contrast = contrast
+        self.saturation = saturation
+        self.hue = hue
+    
+    def __call__(self, sample):
+        imidx, image, label = sample['imidx'], sample['image'], sample['label']
+        
+        # 只对图像进行处理，标签保持不变
+        # 确保图像是3通道RGB
+        if image.shape[2] == 1:
+            # 如果是单通道图像，复制到3个通道
+            image = np.concatenate([image, image, image], axis=2)
+        
+        # 随机应用变换, 概率为0.5
+        if random.random() < 0.5:
+            # 转换为PIL Image进行色彩调整
+            image_pil = Image.fromarray((image * 255).astype(np.uint8))
+            
+            # 随机调整亮度
+            if random.random() < 0.5 and self.brightness > 0:
+                brightness_factor = random.uniform(max(0, 1 - self.brightness), 1 + self.brightness)
+                enhancer = ImageEnhance.Brightness(image_pil)
+                image_pil = enhancer.enhance(brightness_factor)
+            
+            # 随机调整对比度
+            if random.random() < 0.5 and self.contrast > 0:
+                contrast_factor = random.uniform(max(0, 1 - self.contrast), 1 + self.contrast)
+                enhancer = ImageEnhance.Contrast(image_pil)
+                image_pil = enhancer.enhance(contrast_factor)
+            
+            # 随机调整饱和度
+            if random.random() < 0.5 and self.saturation > 0:
+                saturation_factor = random.uniform(max(0, 1 - self.saturation), 1 + self.saturation)
+                enhancer = ImageEnhance.Color(image_pil)
+                image_pil = enhancer.enhance(saturation_factor)
+            
+            # 随机调整色调
+            if random.random() < 0.5 and self.hue > 0:
+                hue_factor = random.uniform(-self.hue, self.hue)
+                image_np = np.array(image_pil)
+                # 转换到HSV空间
+                image_hsv = color.rgb2hsv(image_np)
+                # 调整色调 (H通道)
+                image_hsv[:, :, 0] = (image_hsv[:, :, 0] + hue_factor) % 1.0
+                # 转回RGB
+                image_np = color.hsv2rgb(image_hsv)
+                # 确保值在[0,1]范围内
+                image = np.clip(image_np, 0, 1)
+            else:
+                # 如果没有调整色调，将PIL图像转回numpy数组
+                image = np.array(image_pil).astype(np.float32) / 255.0
+        
+        return {'imidx': imidx, 'image': image, 'label': label}
 
 class ToTensor(object):
 	"""Convert ndarrays in sample to Tensors."""
