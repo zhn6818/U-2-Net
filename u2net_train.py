@@ -67,14 +67,14 @@ model_name = 'u2net' #'u2netp'
 # data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
 # tra_image_dir = os.path.join('im_aug' + os.sep)
 # tra_label_dir = os.path.join('gt_aug' + os.sep)
-data_dir = "U2net_data/train_data/"
-tra_image_dir = os.path.join('im_aug' + os.sep)
-tra_label_dir = os.path.join('gt_aug' + os.sep)
-# tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
-# tra_label_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'gt_aug' + os.sep)
+# data_dir = "U2net_data/train_data/"
+# tra_image_dir = os.path.join('im_aug' + os.sep)
+# tra_label_dir = os.path.join('gt_aug' + os.sep)
+# # tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
+# # tra_label_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'gt_aug' + os.sep)
 
-image_ext = '.jpg'
-label_ext = '.png'
+# image_ext = '.jpg'
+# label_ext = '.png'
 
 model_dir = os.path.join(os.getcwd(), 'saved_models', model_name + os.sep)
 print(f"Model directory: {model_dir}")
@@ -92,20 +92,36 @@ batch_size_val = 1
 train_num = 0
 val_num = 0
 
-tra_img_name_list = glob.glob(data_dir + tra_image_dir + '*' + image_ext)
+# tra_img_name_list = glob.glob(data_dir + tra_image_dir + '*' + image_ext)
 
+# tra_lbl_name_list = []
+# for img_path in tra_img_name_list:
+# 	img_name = img_path.split(os.sep)[-1]
+
+# 	aaa = img_name.split(".")
+# 	bbb = aaa[0:-1]
+# 	imidx = bbb[0]
+# 	for i in range(1,len(bbb)):
+# 		imidx = imidx + "." + bbb[i]
+
+# 	# tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + '_Segmentation' + label_ext)
+# 	tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + label_ext)
+
+# 初始化train.txt路径
+train_txt_path = "train.txt"
+tra_img_name_list = []
 tra_lbl_name_list = []
-for img_path in tra_img_name_list:
-	img_name = img_path.split(os.sep)[-1]
 
-	aaa = img_name.split(".")
-	bbb = aaa[0:-1]
-	imidx = bbb[0]
-	for i in range(1,len(bbb)):
-		imidx = imidx + "." + bbb[i]
-
-	# tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + '_Segmentation' + label_ext)
-	tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + label_ext)
+# 读取train.txt文件，每行按空格分割为图像路径和标签路径
+with open(train_txt_path, 'r') as f:
+    for line in f:
+        line = line.strip()
+        if line:  # 确保行不为空
+            parts = line.split()
+            if len(parts) == 2:  # 确保每行有两部分
+                img_path, lbl_path = parts
+                tra_img_name_list.append(img_path)
+                tra_lbl_name_list.append(lbl_path)
 
 print("---")
 print("train images: ", len(tra_img_name_list))
@@ -119,7 +135,7 @@ salobj_dataset = SalObjDataset(
     lbl_name_list=tra_lbl_name_list,
     transform=transforms.Compose([
         RescaleT(512),
-        RandomCrop(512),
+        # RandomCrop(512),
         ToTensorLab(flag=0)]))
 salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=4)
 

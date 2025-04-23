@@ -16,3 +16,4 @@ __pycache__
 .train_pid
 tuotan3_saved_models_multichannel/
 JLD/
+train.txt
