@@ -215,6 +215,108 @@ class ColorJitter(object):
         
         return {'imidx': imidx, 'image': image, 'label': label}
 
+class RandomMaxFilter(object):
+    """
+    随机大值滤波数据增强
+    在标签有mask的区域中随机选取位置，对原图进行大值滤波处理
+    
+    Args:
+        num_regions (int): 要处理的区域数量，默认为10
+        kernel_size_range (tuple): 大值滤波核的大小范围，默认为(5, 15)
+        threshold (float): 标签像素值的阈值，大于此值被视为mask区域，默认为0.5
+        apply_prob (float): 应用此增强的概率，默认为0.5
+        need_regions (bool): 是否需要返回滤波区域信息，默认为False
+    """
+    def __init__(self, num_regions=10, kernel_size_range=(5, 15), threshold=0.5, apply_prob=0.5, need_regions=False):
+        self.num_regions = num_regions
+        self.kernel_size_range = kernel_size_range
+        self.threshold = threshold
+        self.apply_prob = apply_prob
+        self.need_regions = need_regions
+    
+    def __call__(self, sample):
+        imidx, image, label = sample['imidx'], sample['image'].copy(), sample['label']
+        
+        # 初始化滤波区域列表，用于记录处理的位置
+        filtered_regions = []
+        
+        # 按概率随机应用
+        if random.random() >= self.apply_prob:
+            if self.need_regions:
+                return {'imidx': imidx, 'image': image, 'label': label, 'filtered_regions': filtered_regions}
+            else:
+                return {'imidx': imidx, 'image': image, 'label': label}
+        
+        # 确保图像是3通道RGB
+        if image.shape[2] == 1:
+            image = np.concatenate([image, image, image], axis=2)
+        
+        # 找到标签中的mask区域（假设标签是单通道或多通道的第一个通道）
+        if label.shape[2] == 1:
+            mask = label[:, :, 0] > self.threshold
+        else:
+            mask = label[:, :, 0] > self.threshold
+        
+        # 如果没有mask区域，直接返回原样本
+        if not np.any(mask):
+            if self.need_regions:
+                return {'imidx': imidx, 'image': image, 'label': label, 'filtered_regions': filtered_regions}
+            else:
+                return {'imidx': imidx, 'image': image, 'label': label}
+        
+        # 找到mask区域的坐标
+        mask_indices = np.where(mask)
+        if len(mask_indices[0]) == 0:
+            if self.need_regions:
+                return {'imidx': imidx, 'image': image, 'label': label, 'filtered_regions': filtered_regions}
+            else:
+                return {'imidx': imidx, 'image': image, 'label': label}
+        
+        # 随机选择要处理的区域数量（不超过实际的mask点数）
+        num_to_process = min(self.num_regions, len(mask_indices[0]))
+        
+        # 随机选择要处理的位置的索引
+        if num_to_process > 0:
+            random_indices = np.random.choice(len(mask_indices[0]), num_to_process, replace=False)
+            
+            # 对每个位置应用大值滤波
+            for idx in random_indices:
+                y, x = mask_indices[0][idx], mask_indices[1][idx]
+                
+                # 随机选择滤波核大小
+                kernel_size = random.randint(*self.kernel_size_range)
+                if kernel_size % 2 == 0:  # 确保核大小为奇数
+                    kernel_size += 1
+                
+                # 计算滤波区域的边界
+                half_size = kernel_size // 2
+                y_min = max(0, y - half_size)
+                y_max = min(image.shape[0], y + half_size + 1)
+                x_min = max(0, x - half_size)
+                x_max = min(image.shape[1], x + half_size + 1)
+                
+                # 如果区域太小，跳过
+                if y_max - y_min < 3 or x_max - x_min < 3:
+                    continue
+                
+                # 记录滤波区域（如果需要）
+                if self.need_regions:
+                    filtered_regions.append((y_min, y_max, x_min, x_max, kernel_size))
+                
+                # 对每个通道应用大值滤波
+                for c in range(image.shape[2]):
+                    region = image[y_min:y_max, x_min:x_max, c]
+                    # 应用大值滤波
+                    from scipy import ndimage
+                    filtered_region = ndimage.maximum_filter(region, size=kernel_size)
+                    image[y_min:y_max, x_min:x_max, c] = filtered_region
+        
+        # 根据need_regions参数决定是否返回滤波区域信息
+        if self.need_regions:
+            return {'imidx': imidx, 'image': image, 'label': label, 'filtered_regions': filtered_regions}
+        else:
+            return {'imidx': imidx, 'image': image, 'label': label}
+
 class ToTensor(object):
 	"""Convert ndarrays in sample to Tensors."""
 
