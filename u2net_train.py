@@ -39,7 +39,7 @@ def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v):
 	loss6 = bce_loss(d6,labels_v)
 
 	loss = loss0 + loss1 + loss2 + loss3 + loss4 + loss5 + loss6
-	print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f\n"%(loss0.data.item(),loss1.data.item(),loss2.data.item(),loss3.data.item(),loss4.data.item(),loss5.data.item(),loss6.data.item()))
+	print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f"%(loss0.data.item(),loss1.data.item(),loss2.data.item(),loss3.data.item(),loss4.data.item(),loss5.data.item(),loss6.data.item()))
 
 	return loss0, loss
 
@@ -64,18 +64,6 @@ def calculate_accuracy(pred, target, threshold=0.5):
 
 model_name = 'u2net' #'u2netp'
 
-# data_dir = os.path.join(os.getcwd(), 'train_data' + os.sep)
-# tra_image_dir = os.path.join('im_aug' + os.sep)
-# tra_label_dir = os.path.join('gt_aug' + os.sep)
-# data_dir = "U2net_data/train_data/"
-# tra_image_dir = os.path.join('im_aug' + os.sep)
-# tra_label_dir = os.path.join('gt_aug' + os.sep)
-# # tra_image_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'im_aug' + os.sep)
-# # tra_label_dir = os.path.join('DUTS', 'DUTS-TR', 'DUTS-TR', 'gt_aug' + os.sep)
-
-# image_ext = '.jpg'
-# label_ext = '.png'
-
 model_dir = os.path.join(os.getcwd(), 'saved_models', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
@@ -91,21 +79,6 @@ batch_size_train = 2
 batch_size_val = 1
 train_num = 0
 val_num = 0
-
-# tra_img_name_list = glob.glob(data_dir + tra_image_dir + '*' + image_ext)
-
-# tra_lbl_name_list = []
-# for img_path in tra_img_name_list:
-# 	img_name = img_path.split(os.sep)[-1]
-
-# 	aaa = img_name.split(".")
-# 	bbb = aaa[0:-1]
-# 	imidx = bbb[0]
-# 	for i in range(1,len(bbb)):
-# 		imidx = imidx + "." + bbb[i]
-
-# 	# tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + '_Segmentation' + label_ext)
-# 	tra_lbl_name_list.append(data_dir + tra_label_dir + imidx + label_ext)
 
 # 初始化train.txt路径
 train_txt_path = "train.txt"
@@ -135,9 +108,8 @@ salobj_dataset = SalObjDataset(
     lbl_name_list=tra_lbl_name_list,
     transform=transforms.Compose([
         RescaleT(512),
-        # RandomCrop(512),
         ToTensorLab(flag=0)]))
-salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=4)
+salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=2)
 
 # ------- 3. define model --------
 # 检测可用的设备
@@ -227,7 +199,7 @@ def train_model():
             # del temporary outputs and loss
             del d0, d1, d2, d3, d4, d5, d6, loss2, loss
 
-            print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f " % (
+            print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f \n" % (
             epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, 
             running_loss / ite_num4val, running_tar_loss / ite_num4val, batch_accuracy))
 
