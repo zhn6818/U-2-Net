@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from PIL import Image, ImageEnhance
+import cv2  # 添加cv2库用于绘制直线
 
 #==========================dataset load==========================
 class RescaleT(object):
@@ -321,6 +322,75 @@ class RandomMaxFilter(object):
             return {'imidx': imidx, 'image': image, 'label': label, 'filtered_regions': filtered_regions}
         else:
             return {'imidx': imidx, 'image': image, 'label': label}
+
+class RandomScratch(object):
+    """
+    随机划痕数据增强
+    在图像上随机添加一条黑色或灰色的直线，用于模拟实际图像中的划伤
+    
+    Args:
+        line_width_range (tuple): 线条宽度范围，默认为(1, 2)，值越小线条越细
+        color_range (tuple): 线条颜色范围(0-255)，默认为(0, 50)，0表示黑色，越大越亮
+        apply_prob (float): 应用此增强的概率，默认为0.5
+        num_lines (int): 添加的划痕数量，默认为1
+    """
+    def __init__(self, line_width_range=(1, 2), color_range=(0, 50), apply_prob=0.5, num_lines=1):
+        self.line_width_range = line_width_range
+        self.color_range = color_range
+        self.apply_prob = apply_prob
+        self.num_lines = num_lines
+    
+    def __call__(self, sample):
+        imidx, image, label = sample['imidx'], sample['image'].copy(), sample['label']
+        
+        # 按概率随机应用
+        if random.random() >= self.apply_prob:
+            return {'imidx': imidx, 'image': image, 'label': label}
+        
+        # 确保图像是3通道RGB
+        if image.shape[2] == 1:
+            image = np.concatenate([image, image, image], axis=2)
+        
+        # 获取图像高度和宽度
+        h, w = image.shape[:2]
+        
+        # 将浮点型图像转换为uint8以便使用OpenCV绘制
+        img_draw = (image * 255).astype(np.uint8)
+        
+        # 添加指定数量的划痕
+        for _ in range(self.num_lines):
+            # 随机选择起点和终点
+            start_x = random.randint(0, w - 1)
+            start_y = random.randint(0, h - 1)
+            
+            # 随机选择角度 (0-180度)
+            angle = random.uniform(0, 180)
+            # 随机选择长度 (图像对角线长度的10%-70%)
+            diagonal = math.sqrt(h**2 + w**2)
+            length = random.uniform(0.1 * diagonal, 0.7 * diagonal)
+            
+            # 计算终点
+            end_x = int(start_x + length * math.cos(math.radians(angle)))
+            end_y = int(start_y + length * math.sin(math.radians(angle)))
+            
+            # 确保终点在图像内
+            end_x = max(0, min(w - 1, end_x))
+            end_y = max(0, min(h - 1, end_y))
+            
+            # 随机选择线宽
+            line_width = random.randint(*self.line_width_range)
+            
+            # 随机选择颜色 (灰度值)
+            color_value = random.randint(*self.color_range)
+            color = (color_value, color_value, color_value)
+            
+            # 在图像上绘制直线
+            cv2.line(img_draw, (start_x, start_y), (end_x, end_y), color, line_width)
+        
+        # 将图像转换回原始的float格式
+        image = img_draw.astype(np.float32) / 255.0
+        
+        return {'imidx': imidx, 'image': image, 'label': label}
 
 class ToTensor(object):
 	"""Convert ndarrays in sample to Tensors."""

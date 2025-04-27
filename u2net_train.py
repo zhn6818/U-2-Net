@@ -23,7 +23,7 @@ from data_loader import ToTensorLab
 from data_loader import SalObjDataset
 from data_loader import ColorJitter
 from data_loader import RandomMaxFilter
-
+from data_loader import RandomScratch
 from model import U2NET
 from model import U2NETP
 
@@ -71,7 +71,7 @@ model_dir = os.path.join(os.getcwd(), 'saved_models', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
 # 添加预训练模型路径
-pretrained_model_path = "pretrained/u2net_best_acc_0.9344_epoch_870.pth"
+pretrained_model_path = "saved_models/u2net_425/u2net_bce_itr_218000_train_1.562170_tar_0.123365.pth"
 # 从预训练模型文件名中提取起始epoch
 start_epoch = 0  # 从文件名中提取的epoch数
 print(f"Pretrained model: {pretrained_model_path}")
@@ -124,6 +124,12 @@ salobj_dataset = SalObjDataset(
             threshold=0.2,             # 标签像素阈值
             apply_prob=0.5,            # 设置为0.5的概率应用
         ),
+        RandomScratch(
+                line_width_range=(1, 2),  # 修改为1像素宽的线条
+                color_range=(0, 30),
+                apply_prob=0.5,  # 为了测试目的设置为100%应用
+                num_lines=2
+            ),
         ToTensorLab(flag=0)]))
 salobj_dataloader = DataLoader(salobj_dataset, batch_size=batch_size_train, shuffle=True, num_workers=2)
 
