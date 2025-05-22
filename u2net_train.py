@@ -71,7 +71,7 @@ model_dir = os.path.join(os.getcwd(), 'saved_models', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
 # 添加预训练模型路径
-pretrained_model_path = "saved_models/u2net_425/u2net_bce_itr_218000_train_1.562170_tar_0.123365.pth"
+pretrained_model_path = ""
 # 从预训练模型文件名中提取起始epoch
 start_epoch = 0  # 从文件名中提取的epoch数
 print(f"Pretrained model: {pretrained_model_path}")
