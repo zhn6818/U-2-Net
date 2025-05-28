@@ -88,6 +88,17 @@
                 "--flag",
                 "0"
             ]
+        },
+        {
+            "name": "Python Debugger: txt.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "txt_generate.py",
+            "args": [
+                "/data1/zhn/JLD/train_768/",
+                "--output",
+                "/data1/zhn/JLD/train_768/train.txt"
+            ]
         }
     ]
 }
