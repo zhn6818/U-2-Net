@@ -1,314 +1,200 @@
-<p align="center">
-  <img width="320" height="320" src="figures/U2Net_Logo.png">
-  
-  <h1 align="center">U<sup>2</sup>-Net: U Square Net</h1>
-    
-</p>
+# U²-Net 晶界分割项目
 
-This is the official repo for our paper **U<sup>2</sup>-Net(U square net)** published in Pattern Recognition 2020:
+## 项目概述
 
-## [U<sup>2</sup>-Net: Going Deeper with Nested U-Structure for Salient Object Detection](https://arxiv.org/pdf/2005.09007.pdf)
-[Xuebin Qin](https://xuebinqin.github.io/), [Zichen Zhang](https://webdocs.cs.ualberta.ca/~zichen2/), [Chenyang Huang](https://chenyangh.com/), [Masood Dehghan](https://sites.google.com/view/masooddehghan), [Osmar R. Zaiane](http://webdocs.cs.ualberta.ca/~zaiane/) and [Martin Jagersand](https://webdocs.cs.ualberta.ca/~jag/)
+本项目基于U²-Net架构，专门针对材料科学中的晶界分割任务进行了优化。项目包含原始的U²-Net模型和专门为晶界分割优化的U²-Net-Grain模型。
 
+## 模型架构
 
-__Contact__: xuebin[at]ualberta[dot]ca
+### 1. 原始U²-Net模型
+- **U2NET**: 完整版本，参数量约173.6MB
+- **U2NETP**: 轻量版本，参数量约4.7MB
 
-## Updates !!!
+### 2. 晶界分割优化模型 (U²-Net-Grain)
+- **U2NET_GRAIN**: 针对晶界分割优化的完整版本
+- **U2NETP_GRAIN**: 针对晶界分割优化的轻量版本
 
-** (2022-Aug.-24) ** We are glad to announce that our U<sup>2</sup>-Net published in Pattern Recognition has been awarded the 2020 Pattern Recognition BEST PAPER AWARD !!!
-![u2net-best-paper](figures/u2net-best-paper.jpg)
+#### 优化特性：
+1. **减少下采样层数**: 保留更多细节信息，适合细粒度的晶界检测
+2. **密集跳跃连接**: 增强特征融合能力
+3. **注意力机制**: 
+   - 通道注意力 (Channel Attention)
+   - 空间注意力 (Spatial Attention)
+   - CBAM (Convolutional Block Attention Module)
+4. **边缘增强模块**: 使用Sobel算子增强边缘特征
+5. **转置卷积上采样**: 替代双线性插值，提高细节恢复能力
 
-** (2022-Aug.-17) **
-Our U<sup>2</sup>-Net models are now available on [PlayTorch](https://playtorch.dev/), where you can build your own demo and run it on your Android/iOS phone. Try out this demo on [![PlayTorch Demo](https://github.com/facebookresearch/playtorch/blob/main/website/static/assets/playtorch_badge.svg)](https://playtorch.dev/snack/@playtorch/u2net/) and bring your ideas about U<sup>2</sup>-Net to truth in minutes!
+## 项目结构
 
-** (2022-Jul.-5)** Our new work **Highly Accurate Dichotomous Image Segmentation (DIS) [**Project Page**](https://xuebinqin.github.io/dis/index.html), [**Github**](https://github.com/xuebinqin/DIS) is accepted by ECCV 2022. Our code and dataset will be released before July 17th, 2022. Please be aware of our updates. 
-![ship-demo](figures/ship-demo.gif)
-![bg-removal](figures/bg-removal.gif)
-![view-move](figures/view-move.gif)
-![motor-demo](figures/motor-demo.gif)
-
-** (2022-Jun.-3)** Thank [**Adir Kol**](https://github.com/adirkol) for sharing the iOS App [**3D Photo Creator**](https://apps.apple.com/us/app/3d-photo-creator/id1619676262) based on our U<sup>2</sup>-Net.
-![portrait-ios-app](figures/3d-photo-re.jpg)
-
-** (2022-Mar.-31)** Thank [**Hikaru Tsuyumine**] for implementing the iOS App [**Portrait Drawing**](https://apps.apple.com/us/app/portrait-drawing/id1623269600) based on our U<sup>2</sup>-Net portrait generation model.
-![portrait-ios-app](figures/portrait-ios-app.jpg)
-
-** (2022-Apr.-12)** Thank [**Kevin Shah**](https://github.com/ioskevinshah) for providing us a great iOS App [**Lensto**](https://apps.apple.com/in/app/lensto-background-changer/id1574844033), ([**Demo Video**](https://www.youtube.com/shorts/jWwUiKZjfok)), based on U<sup>2</sup>-Net.
-![lensto](figures/lensto.png)
-
-** (2022-Mar.-31)** Our U<sup>2</sup>-Net model is also integrated by [**Hotpot.ai**](https://hotpot.ai/) for art design.
-![hotpot](figures/hotpot.png)
-
-** (2022-Mar-19)** Thank [**Kikedao**](https://github.com/Kikedao) for providing a fantastic webapp [**Silueta**](https://silueta.me/) based on U<sup>2</sup>-Net. More details can be found at [**https://github.com/xuebinqin/U-2-Net/issues/295**](https://github.com/xuebinqin/U-2-Net/issues/295).
-![silueta](figures/silueta.png) 
-
-** (2022-Mar-17)** Thank [**Ezaldeen Sahb**](https://github.com/Ezaldeen99/BackgroundRemoval) for implementing the iOS library for image background removal based on U<sup>2</sup>-Net, which will greatly facilitate the developing of mobile apps.
-![close-seg](figures/swift-u2net.jpeg) 
-
-<!-- ** (2022-Mar-10)** Thank [**Doron Adler**](https://github.com/Norod/U-2-Net-StyleTransfer) for training the awesome style transfer U<sup>2</sup>-Net.
-![style-trans](figures/style-trans.JPG)  -->
-
-** (2022-Mar-8)** Thank [**Levin Dabhi**](https://github.com/levindabhi/cloth-segmentation) for training the amazing clothes segmentation U<sup>2</sup>-Net.
-![close-seg](figures/close-seg.jpg) 
-
-** (2022-Mar-3)** Thank [**Renato Violin**](https://github.com/renatoviolin/bg-remove-augment) for providing an awesome webapp for image background removal and replacement based on our U<sup>2</sup>-Net.
-![bg-rm-aug](figures/bg-rm-aug.gif) 
-
-**(2021-Dec-21)** This [**blog**](https://rockyshikoku.medium.com/u2net-to-coreml-machine-learning-segmentation-on-iphone-eac0c721d67b) clearly describes the way of converting U<sup>2</sup>-Net to [**CoreML**](https://github.com/john-rocky/CoreML-Models) and running it on iphone. 
-
-**(2021-Nov-28)** Interesting Sky Segmentation models developed by [**xiongzhu**](https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing) using U<sup>2</sup>-Net. 
-
-![im_sky_segmentation](figures/sky-seg.png)
-
-**(2021-Nov-28)** Awesome image editing app [**Pixelmator pro**](https://www.pixelmator.com/pro/) uses U<sup>2</sup>-Net as one of its background removal models. 
-
-![im_sky_segmentation](figures/pixelmator.jpg)
-
-**(2021-Aug-24)** We played a bit more about fusing the orignal image and the generated portraits to composite different styles. You can <br/> 
-(1) Download this repo by
 ```
-git clone https://github.com/NathanUA/U-2-Net.git
-```
-(2) Download the u2net_portrait.pth from [**GoogleDrive**](https://drive.google.com/file/d/1IG3HdpcRiDoWNookbncQjeaPN28t90yW/view?usp=sharing) or [**Baidu Pan(提取码：chgd)**](https://pan.baidu.com/s/1BYT5Ts6BxwpB8_l2sAyCkw)model and put it into the directory: ```./saved_models/u2net_portrait/```, <br/>
-(3) run the code by command 
-```
-python u2net_portrait_composite.py -s 20 -a 0.5
-```
-,where ``-s`` indicates the sigma of gaussian function for blurring the orignal image and ``-a`` denotes the alpha weights of the orignal image when fusing them. <br/>
-
-![im_portrait_composite](figures/im_composite.jpg)
-
-**(2021-July-16)** A new [background removal webapp](https://remove-background.net/) developed by Изатоп Василий. 
-
-![rm_bg](figures/rm_bg.JPG)
-
-**(2021-May-26)** Thank [**Dang Quoc Quy**](https://github.com/quyvsquy) for his [**Art Transfer APP**](https://play.google.com/store/apps/details?id=com.quyvsquy.arttransfer) built upon U<sup>2</sup>-Net.
-
-<!---![art_transfer](figures/art_transfer.JPG)--->
-
-**(2021-May-5)** Thank [**AK391**](https://github.com/AK391) for sharing his [**Gradio Web Demo of U<sup>2</sup>-Net**](https://gradio.app/hub/AK391/U-2-Net).
-
-![gradio_web_demo](figures/gradio_web_demo.jpg)
-
-
-**(2021-Apr-29)** Thanks [**Jonathan Benavides Vallejo**](https://www.linkedin.com/in/jonathanbv/) for releasing his App [**LensOCR: Extract Text & Image**](https://apps.apple.com/ch/app/lensocr-extract-text-image/id1549961729?l=en&mt=12), which uses U<sup>2</sup>-Net for extracting the image foreground.
-
-![LensOCR APP](figures/LensOCR.jpg)
-
-**(2021-Apr-18)** Thanks [**Andrea Scuderi**](https://www.linkedin.com/in/andreascuderi/) for releasing his App [**Clipping Camera**](https://apps.apple.com/us/app/clipping-camera/id1548192169?ign-mpt=uo%3D2), which is an U<sup>2</sup>-Net driven realtime camera app and "is able to detect relevant object from the scene and clip them to apply fancy filters". 
-
-![Clipping Camera APP](figures/clipping_camera.jpg)
-
-**(2021-Mar-17)** [**Dennis Bappert**](https://github.com/dennisbappert) re-trained the U<sup>2</sup>-Net model for [**human portrait matting**](https://github.com/dennisbappert/u-2-net-portrait). The results look very promising and he also provided the details of the training process and data generation(and augmentation) strategy, which are inspiring.
-
-**(2021-Mar-11)** Dr. Tim developed a [**video version rembg**](https://github.com/ecsplendid/rembg-greenscreen) for removing video backgrounds using U<sup>2</sup>-Net. The awesome demo results can be found on [**YouTube**](https://www.youtube.com/watch?v=4NjqR2vCV_k).
-
-**(2021-Mar-02)** We found some other interesting applications of our U<sup>2</sup>-Net including [**MOJO CUT**](https://play.google.com/store/apps/details?id=com.innoria.magicut&hl=en_CA&gl=US), [**Real-Time Background Removal on Iphone**](https://www.linkedin.com/feed/update/urn:li:activity:6752303661705170944/?updateEntityUrn=urn%3Ali%3Afs_feedUpdate%3A%28V2%2Curn%3Ali%3Aactivity%3A6752303661705170944%29), [**Video Background Removal**](https://nisargkapkar.hashnode.dev/image-and-video-background-removal-using-deep-learning), [**Another Online Portrait Generation Demo on AWS**](http://s3-website-hosting-u2net.s3-website-eu-west-1.amazonaws.com/), [**AI Scissor**](https://qooba.net/2020/09/11/ai-scissors-sharp-cut-with-neural-networks/).
-
-**(2021-Feb-15)** We just released an online demo [**http://profu.ai**](http://profu.ai) for the portrait generation. Please feel free to give it a try and provide any suggestions or comments. <br/>
-![Profuai](figures/profuai.png) <br/>
-
-**(2021-Feb-06)** Recently, some people asked the problem of using U<sup>2</sup>-Net for human segmentation, so we trained another example model for human segemntation based on [**Supervisely Person Dataset**](https://supervise.ly/explore/projects/supervisely-person-dataset-23304/datasets). <br/>
-
-(1) To run the human segmentation model, please first downlowd the [**u2net_human_seg.pth**](https://drive.google.com/file/d/1m_Kgs91b21gayc2XLW0ou8yugAIadWVP/view?usp=sharing) model weights into ``` ./saved_models/u2net_human_seg/```. <br/>
-(2) Prepare the to-be-segmented images into the corresponding directory, e.g. ```./test_data/test_human_images/```. <br/>
-(3) Run the inference by command: ```python u2net_human_seg_test.py``` and the results will be output into the corresponding dirctory, e.g. ```./test_data/u2net_test_human_images_results/```<br/>
-[**Notes: Due to the labeling accuracy of the Supervisely Person Dataset, the human segmentation model (u2net_human_seg.pth) here won't give you hair-level accuracy. But it should be more robust than u2net trained with DUTS-TR dataset on general human segmentation task. It can be used for human portrait segmentation, human body segmentation, etc.**](https://github.com/NathanUA/U-2-Net)<br/>
-
-![Human Image Segmentation](figures/human_seg.png) <br/>
-![Human Video](figures/human_seg_video.gif)
-![Human Video Results](figures/human_seg_results.gif)
-
-**(2020-Dec-28)** Some interesting applications and useful tools based on U<sup>2</sup>-Net: <br/>
-(1) [**Xiaolong Liu**](https://github.com/LiuXiaolong19920720) developed several very interesting applications based on U<sup>2</sup>-Net including [**Human Portrait Drawing**](https://www.cvpy.net/studio/cv/func/DeepLearning/sketch/sketch/page/)(As far as I know, Xiaolong is the first one who uses U<sup>2</sup>-Net for portrait generation), [**image matting**](https://www.cvpy.net/studio/cv/func/DeepLearning/matting/matting/page/) and [**so on**](https://www.cvpy.net/). <br/>
-(2) [**Vladimir Seregin**](https://github.com/peko/nn-lineart) developed an interesting tool, [**NN based lineart**](https://peko.github.io/nn-lineart/), for comparing the portrait results of U<sup>2</sup>-Net and that of another popular model, [**ArtLine**](https://github.com/vijishmadhavan/ArtLine), developed by [**Vijish Madhavan**](https://github.com/vijishmadhavan). <br/>
-(3) [**Daniel Gatis**](https://github.com/danielgatis/rembg) built a python tool, [**Rembg**](https://pypi.org/project/rembg/), for image backgrounds removal based on U<sup>2</sup>-Net. I think this tool will greatly facilitate the application of U<sup>2</sup>-Net in different fields. <br/>
-![REMBG](figures/rembg.png)
-
-**(2020-Nov-21)** Recently, we found an interesting application of U<sup>2</sup>-Net for [**human portrait drawing**](https://www.pythonf.cn/read/141098). Therefore, we trained another model for this task based on the [**APDrawingGAN dataset**](https://github.com/yiranran/APDrawingGAN).
-
-![Sample Results: Kids](figures/portrait_kids.png)
-
-![Sample Results: Ladies](figures/portrait_ladies.png)
-
-![Sample Results: Men](figures/portrait_men.png)
-
-### Usage for portrait generation
-1. Clone this repo to local
-```
-git clone https://github.com/NathanUA/U-2-Net.git
+U-2-Net/
+├── model/
+│   ├── __init__.py          # 模型导入
+│   ├── u2net.py            # 原始U²-Net模型
+│   └── u2net_grain.py      # 晶界分割优化模型
+├── data_loader.py          # 数据加载和预处理
+├── u2net_train.py          # 训练脚本
+├── u2net_infer_single_img.py # 推理脚本
+├── test_u2net_grain.py     # 模型测试脚本
+├── saved_models/           # 保存的模型权重
+├── test_results/           # 推理结果
+└── README.md              # 项目说明文档
 ```
 
-2. Download the u2net_portrait.pth from [**GoogleDrive**](https://drive.google.com/file/d/1IG3HdpcRiDoWNookbncQjeaPN28t90yW/view?usp=sharing) or [**Baidu Pan(提取码：chgd)**](https://pan.baidu.com/s/1BYT5Ts6BxwpB8_l2sAyCkw)model and put it into the directory: ```./saved_models/u2net_portrait/```.
-
-3. Run on the testing set. <br/>
-(1) Download the train and test set from [**APDrawingGAN**](https://github.com/yiranran/APDrawingGAN). These images and their ground truth are stitched side-by-side (512x1024). You need to split each of these images into two 512x512 images and put them into ```./test_data/test_portrait_images/portrait_im/```. You can also download the split testing set on [GoogleDrive](https://drive.google.com/file/d/1NkTsDDN8VO-JVik6VxXyV-3l2eo29KCk/view?usp=sharing). <br/>
-(2) Running the inference with command ```python u2net_portrait_test.py``` will ouptut the results into ```./test_data/test_portrait_images/portrait_results```. <br/>
-
-4. Run on your own dataset. <br/>
-(1) Prepare your images and put them into ```./test_data/test_portrait_images/your_portrait_im/```. [**To obtain enough details of the protrait, human head region in the input image should be close to or larger than 512x512. The head background should be relatively clear.**](https://github.com/NathanUA/U-2-Net) <br/>
-(2) Run the prediction by command ```python u2net_portrait_demo.py``` will outputs the results to ```./test_data/test_portrait_images/your_portrait_results/```. <br/>
-(3) The difference between ```python u2net_portrait_demo.py``` and ```python u2net_portrait_test.py``` is that we added a simple [**face detection**](https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_objdetect/py_face_detection/py_face_detection.html) step before the portrait generation in ```u2net_portrait_demo.py```.  Because the testing set of APDrawingGAN are normalized and cropped to 512x512 for including only heads of humans, while our own dataset may varies with different resolutions and contents. Therefore, the code ```python u2net_portrait_demo.py``` will detect the biggest face from the given image and then crop, pad and resize the ROI to 512x512 for feeding to the network. The following figure shows how to take your own photos for generating high quality portraits.
-
-**(2020-Sep-13)** Our U<sup>2</sup>-Net based model is the **6th** in [**MICCAI 2020 Thyroid Nodule Segmentation Challenge**](https://tn-scui2020.grand-challenge.org/Resultannouncement/).
-
-**(2020-May-18)** The official paper of our **U<sup>2</sup>-Net (U square net)** ([**PDF in elsevier**(free until July 5 2020)](https://www.sciencedirect.com/science/article/pii/S0031320320302077?dgcid=author), [**PDF in arxiv**](http://arxiv.org/abs/2005.09007)) is now available. If you are not able to access that, please feel free to drop me an email.
-
-**(2020-May-16)** We fixed the upsampling issue of the network. Now, the model should be able to handle **arbitrary input size**. (Tips: This modification is to facilitate the retraining of U<sup>2</sup>-Net on your own datasets. When using our pre-trained model on SOD datasets, please keep the input size as 320x320 to guarantee the performance.)
-
-**(2020-May-16)** We highly appreciate **Cyril Diagne** for building this fantastic AR project: [**AR Copy and Paste**](https://github.com/cyrildiagne/ar-cutpaste) using our **U<sup>2</sup>-Net** (Qin *et al*, PR 2020) and [**BASNet**](https://github.com/NathanUA/BASNet)(Qin *et al*, CVPR 2019). The [**demo video**](https://twitter.com/cyrildiagne/status/1256916982764646402) in twitter has achieved over **5M** views, which is phenomenal and shows us more application possibilities of SOD.
-
-## U<sup>2</sup>-Net Results (176.3 MB)
-
-![U<sup>2</sup>-Net Results](figures/u2netqual.png)
-
-
-## Our previous work: [BASNet (CVPR 2019)](https://github.com/NathanUA/BASNet)
-
-## Required libraries
-
-Python 3.6  
-numpy 1.15.2  
-scikit-image 0.14.0  
-python-opencv
-PIL 5.2.0  
-PyTorch 0.4.0  
-torchvision 0.2.1  
-glob  
-
-## Usage for salient object detection
-1. Clone this repo
-```
-git clone https://github.com/NathanUA/U-2-Net.git
-```
-2. Download the pre-trained model u2net.pth (176.3 MB) from [**GoogleDrive**](https://drive.google.com/file/d/1ao1ovG1Qtx4b7EoskHXmi2E9rp5CHLcZ/view?usp=sharing) or [**Baidu Pan 提取码: pf9k**](https://pan.baidu.com/s/1WjwyEwDiaUjBbx_QxcXBwQ) or u2netp.pth (4.7 MB) from [**GoogleDrive**](https://drive.google.com/file/d/1rbSTGKAE-MTxBYHd-51l2hMOQPT_7EPy/view?usp=sharing) or [**Baidu Pan 提取码: 8xsi**](https://pan.baidu.com/s/10tW12OlecRpE696z8FxdNQ) and put it into the dirctory './saved_models/u2net/' and './saved_models/u2netp/'
-
-3.  Cd to the directory 'U-2-Net', run the train or inference process by command: ```python u2net_train.py```
-or ```python u2net_test.py``` respectively. The 'model_name' in both files can be changed to 'u2net' or 'u2netp' for using different models.  
-
- We also provide the predicted saliency maps ([u2net results](https://drive.google.com/file/d/1mZFWlS4WygWh1eVI8vK2Ad9LrPq4Hp5v/view?usp=sharing),[u2netp results](https://drive.google.com/file/d/1j2pU7vyhOO30C2S_FJuRdmAmMt3-xmjD/view?usp=sharing)) for datasets SOD, ECSSD, DUT-OMRON, PASCAL-S, HKU-IS and DUTS-TE.
-
-
-## U<sup>2</sup>-Net Architecture
-
-![U<sup>2</sup>-Net architecture](figures/U2NETPR.png)
-
-
-## Quantitative Comparison
-
-![Quantitative Comparison](figures/quan_1.png)
-
-![Quantitative Comparison](figures/quan_2.png)
-
-
-## Qualitative Comparison
-
-![Qualitative Comparison](figures/qual.png?raw=true)
-
-## Citation
-```
-@InProceedings{Qin_2020_PR,
-title = {U2-Net: Going Deeper with Nested U-Structure for Salient Object Detection},
-author = {Qin, Xuebin and Zhang, Zichen and Huang, Chenyang and Dehghan, Masood and Zaiane, Osmar and Jagersand, Martin},
-journal = {Pattern Recognition},
-volume = {106},
-pages = {107404},
-year = {2020}
-}
-```
-
-# U2NET 训练改进
-
-## 最新改进
-1. 增加了边缘感知损失，提高模型对图像边缘区域的处理能力
-2. 优化了数据增强策略，增加了模糊和锐化处理
-3. 添加了学习率调度器，动态调整学习率
-4. 增加了验证集评估，更好地监控模型训练效果
-
-## 使用说明
-...
-
-# 代码结构优化
-
-## 训练代码重构
-为了使代码更加模块化和清晰，我们对`u2net_train_dai.py`文件进行了重构，主要包括以下几个方面：
-
-1. **配置参数化**：将所有硬编码的配置参数集中到Config类中，便于修改和维护。
-
-2. **功能模块化**：将代码按照功能划分为不同的类和方法：
-   - `LossFunctions`：损失函数相关计算
-   - `DatasetPreparation`：数据准备和加载
-   - `ModelSetup`：模型创建和初始化
-   - `Trainer`：模型训练逻辑
-
-3. **代码结构清晰**：使用面向对象的方式组织代码，减少了全局变量的使用，使代码更易于理解和维护。
-
-4. **注释完善**：为各个类和方法添加了详细的注释，便于理解功能。
-
-## 训练流程优化
-重构后的训练流程更加清晰和模块化：
-
-1. 初始化配置
-2. 准备训练数据
-3. 设置模型和优化器
-4. 训练模型，包括：
-   - 定期保存模型
-   - 跟踪最佳模型
-   - 记录训练统计信息
-
-## 如何使用
-
-直接运行重构后的训练脚本：
+## 安装依赖
 
 ```bash
-python u2net_train_dai.py
+pip install torch torchvision
+pip install numpy pillow scikit-image
+pip install opencv-python
 ```
 
-如需修改训练参数，可以直接在`Config`类中进行调整，无需修改其他代码。
+## 使用方法
 
-## 更新：多通道分割支持
+### 1. 训练模型
 
-本项目新增了对多通道分割任务的支持，可以处理多类别分割。现有的功能包括：
+#### 准备数据
+创建 `train.txt` 文件，每行包含图像路径和标签路径，用空格分隔：
+```
+path/to/image1.jpg path/to/label1.png
+path/to/image2.jpg path/to/label2.png
+...
+```
 
-### 多通道分割数据集和训练
+#### 开始训练
+```bash
+python u2net_train.py
+```
 
-我们新增了以下文件：
-1. 在`data_loader.py`中添加了`MultiChannelSalObjDataset`和`MultiChannelToTensorLab`类，支持多通道标签处理
-2. 新增`u2net_train_multichannel.py`用于训练多通道分割模型
-3. 新增`u2net_infer_multichannel.py`用于多通道分割模型的推理
+#### 训练配置
+在 `u2net_train.py` 中可以修改以下参数：
+- `model_name`: 选择模型类型 ('u2net', 'u2netp', 'u2net_grain', 'u2netp_grain')
+- `epoch_num`: 训练轮数
+- `batch_size_train`: 训练批次大小
+- `pretrained_model_path`: 预训练模型路径（可选）
 
-### 使用多通道分割功能
+### 2. 模型推理
 
-1. **准备数据集**：
-   - 每个标签图像可以是单通道图像（像素值表示类别）或直接是多通道图像
-   - 在单通道标签中，假设像素值为1的区域是第1类，像素值为2的区域是第2类，依此类推
+#### 批量推理
+```python
+from u2net_infer_single_img import inference_folder
 
-2. **训练多通道分割模型**：
-   ```bash
-   python u2net_train_multichannel.py
-   ```
-   可以在`Config`类中调整参数：
-   - `num_classes`：设置分割类别数量（即输出通道数）
-   - `pretrained_model_path`：可选择加载预训练的单通道模型权重
+inference_folder(
+    image_dir='path/to/images/',
+    model_path='saved_models/u2net_grain/model.pth',
+    output_dir='results/',
+    model_type='u2net_grain'
+)
+```
 
-3. **使用多通道分割模型推理**：
-   ```bash
-   python u2net_infer_multichannel.py --model_path MODEL_PATH --input_dir INPUT_IMAGES_DIR --num_classes NUM_CLASSES
-   ```
-   参数说明：
-   - `model_path`：训练好的多通道模型路径（必需）
-   - `input_dir`：输入图像目录（默认：test_images）
-   - `output_dir`：输出结果保存目录（默认：test_results）
-   - `model_name`：模型类型，u2net或u2netp（默认：u2net）
-   - `num_classes`：分割类别数量（默认：2）
-   - `input_size`：输入图像大小（默认：512）
+#### 单张图片推理
+```python
+from u2net_infer_single_img import inference_single_image
 
-4. **推理结果**：
-   - 会为每个输入图像生成一个包含所有类别可视化的结果图像（`*_visual.png`）
-   - 为每个类别生成单独的掩码图像（`*_class1.png`, `*_class2.png`等）
+inference_single_image(
+    image_path='path/to/image.jpg',
+    model_path='saved_models/u2net_grain/model.pth',
+    output_path='result.png',
+    model_type='u2net_grain'
+)
+```
 
-### 注意事项
+### 3. 模型测试
 
-1. 从单通道模型迁移到多通道模型时，脚本会自动处理输出层参数的差异，保留编码器部分的权重
-2. 多通道模型的评估采用了像素级准确率和Dice系数两种指标
-3. 建议使用RescaleT(512)和MultiChannelToTensorLab变换来处理图像和标签
+运行测试脚本验证模型功能：
+```bash
+python test_u2net_grain.py
+```
+
+## 模型性能对比
+
+| 模型 | 参数量 | 输出数量 | 特殊优化 |
+|------|--------|----------|----------|
+| U2NET | ~44M | 7个侧输出 | 标准U²-Net |
+| U2NETP | ~1.1M | 7个侧输出 | 轻量化版本 |
+| U2NET_GRAIN | ~35M | 5个侧输出 | 晶界分割优化 |
+| U2NETP_GRAIN | ~0.8M | 5个侧输出 | 轻量化+晶界优化 |
+
+## 数据增强
+
+项目支持多种数据增强技术：
+- **颜色抖动** (ColorJitter): 亮度、对比度、饱和度、色调调整
+- **随机最大滤波** (RandomMaxFilter): 模拟图像噪声
+- **随机划痕** (RandomScratch): 模拟图像缺陷
+- **尺寸调整** (RescaleT): 统一输入尺寸
+
+## 损失函数
+
+使用多尺度二元交叉熵损失 (Multi-scale BCE Loss)：
+- 对所有侧输出计算BCE损失
+- 加权融合多个尺度的损失
+- 支持不同模型的输出数量
+
+## 设备支持
+
+自动检测并使用最佳可用设备：
+1. CUDA GPU (如果可用)
+2. Apple Silicon MPS (如果可用)
+3. CPU (备选)
+
+## 模型保存策略
+
+训练过程中会自动保存：
+- 每2000次迭代保存一次
+- 每5个epoch保存一次
+- 准确率提升时保存最佳模型
+
+保存格式：
+```
+{model_name}_epoch_{epoch}_loss_{loss:.4f}_acc_{accuracy:.4f}.pth
+{model_name}_best_acc_{accuracy:.4f}_epoch_{epoch}.pth
+```
+
+## 注意事项
+
+1. **内存管理**: 训练和推理过程中会自动清理临时变量以节省内存
+2. **模型兼容性**: 推理脚本自动适配不同模型的输出格式
+3. **图像格式**: 支持常见图像格式 (.jpg, .jpeg, .png, .bmp)
+4. **输入尺寸**: 默认将输入图像调整为512x512，输出时恢复原始尺寸
+
+## 故障排除
+
+### 常见问题
+
+1. **CUDA内存不足**
+   - 减少batch_size
+   - 使用轻量版模型 (U2NETP_GRAIN)
+
+2. **训练损失不收敛**
+   - 检查数据标签质量
+   - 调整学习率
+   - 使用预训练模型
+
+3. **推理结果不理想**
+   - 确保使用正确的模型类型
+   - 检查模型权重路径
+   - 验证输入图像质量
+
+## 更新日志
+
+### v1.0 (当前版本)
+- 实现原始U²-Net模型
+- 添加晶界分割优化版本
+- 支持多种数据增强
+- 完善的训练和推理流程
+- 自动设备检测和内存管理
+
+## 贡献指南
+
+欢迎提交Issue和Pull Request来改进项目。在提交代码前，请确保：
+1. 代码符合项目风格
+2. 添加必要的注释
+3. 测试新功能的正确性
+
+## 许可证
+
+本项目遵循MIT许可证。详见LICENSE文件。
+
+## 联系方式
+
+如有问题或建议，请通过GitHub Issues联系我们。

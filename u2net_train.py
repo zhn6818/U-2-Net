@@ -225,14 +225,10 @@ def train_model():
                 # 原始U2NET模型有7个输出
                 d0, d1, d2, d3, d4, d5, d6 = outputs
                 loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
-                # del temporary outputs and loss
-                del d0, d1, d2, d3, d4, d5, d6, loss2, loss
             else:
                 # 新的U2NET_GRAIN模型有5个输出
                 d0, d1, d2, d3, d4 = outputs
                 loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, labels_v=labels_v)
-                # del temporary outputs and loss
-                del d0, d1, d2, d3, d4, loss2, loss
             
             # 计算当前batch的准确率（使用d0作为最终输出）
             batch_accuracy = calculate_accuracy(outputs[0], labels_v)
@@ -249,6 +245,12 @@ def train_model():
             epoch_loss += loss.data.item()
             epoch_tar_loss += loss2.data.item()
             batch_count += 1
+
+            # del temporary outputs and loss after using them
+            if model_name in ['u2net', 'u2netp']:
+                del d0, d1, d2, d3, d4, d5, d6, loss2, loss
+            else:
+                del d0, d1, d2, d3, d4, loss2, loss
 
             print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f \n" % (
             epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, 
