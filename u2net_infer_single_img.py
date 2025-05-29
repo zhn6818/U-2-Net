@@ -227,15 +227,21 @@ def inference_single_image(image_path, model_path, output_path, model_type='u2ne
 
         # 保存结果
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        imo.save(output_path)
+        imo.save(output_path)   
         print(f"Result saved to {output_path}")
 
 if __name__ == "__main__":
     # 示例使用
     model_type = 'u2net_grain'  # 可选: 'u2net', 'u2netp', 'u2net_grain', 'u2netp_grain'
     image_dir = '/Volumes/data1/JH/projects/JLD_imgprocess/dataset/img/'
-    model_path = 'saved_models/u2net_grain/u2net_grain_best_acc_0.9053_epoch_32.pth'
-    output_dir = 'test_results/'
+    model_path = 'saved_models/u2net_grain/u2net_grain_best_acc_0.9119_epoch_56.pth'
+    output_dir = 'test_results_new_56/'
+    
+    # 示例使用
+    # model_type = 'u2net'  # 可选: 'u2net', 'u2netp', 'u2net_grain', 'u2netp_grain'
+    # image_dir = '/Volumes/data1/JH/projects/JLD_imgprocess/dataset/img/'
+    # model_path = 'saved_models/u2net/u2net_best_acc_0.9056_epoch_35.pth'
+    # output_dir = 'test_results/'
     
     # 批量推理
     inference_folder(
