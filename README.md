@@ -35,9 +35,13 @@ U-2-Net/
 ├── data_loader.py          # 数据加载和预处理
 ├── u2net_train.py          # 训练脚本
 ├── u2net_infer_single_img.py # 推理脚本
+├── select_model.py         # 模型对比分析脚本
 ├── test_u2net_grain.py     # 模型测试脚本
 ├── saved_models/           # 保存的模型权重
+│   ├── u2net/             # U2NET模型权重
+│   └── u2net_grain/       # U2NET_GRAIN模型权重
 ├── test_results/           # 推理结果
+├── model_comparison_results/ # 模型对比结果
 └── README.md              # 项目说明文档
 ```
 
@@ -99,7 +103,71 @@ inference_single_image(
 )
 ```
 
-### 3. 模型测试
+### 3. 模型对比分析
+
+使用 `select_model.py` 脚本可以批量对比同一文件夹中不同模型的推理效果：
+
+#### 基本用法
+```python
+from select_model import compare_models_in_folder
+
+# 对比u2net_grain文件夹中的所有模型
+compare_models_in_folder(
+    model_folder_path="saved_models/u2net_grain",
+    test_image_path="path/to/test/image.jpg",
+    output_dir="model_comparison_results"
+)
+
+# 对比u2net文件夹中的所有模型
+compare_models_in_folder(
+    model_folder_path="saved_models/u2net",
+    test_image_path="path/to/test/image.jpg", 
+    output_dir="u2net_comparison_results"
+)
+```
+
+#### 直接运行脚本
+```bash
+python select_model.py
+```
+
+#### 功能特点
+- **自动模型类型识别**: 根据文件夹名称自动判断模型类型（u2net、u2netp、u2net_grain、u2netp_grain）
+- **批量推理**: 自动加载文件夹中的所有.pth模型文件进行推理
+- **智能命名**: 输出文件以模型名称命名（如 `u2net_grain_best_acc_0.9556_epoch_336.png`）
+- **错误处理**: 单个模型失败不影响其他模型的处理
+- **内存管理**: 每次推理后自动清理内存，避免内存溢出
+- **进度跟踪**: 显示处理进度和最终统计信息
+
+#### 使用场景
+1. **模型版本对比**: 比较同一架构不同训练轮次的模型效果
+2. **超参数调优**: 评估不同超参数设置的模型性能
+3. **模型选择**: 在多个候选模型中选择最优模型
+4. **质量评估**: 快速评估所有保存模型的推理质量
+
+#### 输出示例
+```
+Using device: mps
+Model type determined: u2net_grain
+Found 30 model files:
+  - u2net_grain_best_acc_0.9189_epoch_1.pth
+  - u2net_grain_best_acc_0.9192_epoch_2.pth
+  - ...
+
+Processing model: u2net_grain_best_acc_0.9189_epoch_1
+✓ Result saved: model_comparison_results/u2net_grain_best_acc_0.9189_epoch_1.png
+
+Processing model: u2net_grain_best_acc_0.9192_epoch_2
+✓ Result saved: model_comparison_results/u2net_grain_best_acc_0.9192_epoch_2.png
+
+=== Processing Summary ===
+Total models: 30
+Successful inferences: 30
+Failed inferences: 0
+Results saved in: model_comparison_results
+```
+
+### 4. 模型测试
 
 运行测试脚本验证模型功能：
 ```bash

@@ -33,31 +33,31 @@ from model import U2NETP_GRAIN
 
 bce_loss = nn.BCELoss(size_average=True)
 
-def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5=None, d6=None, labels_v=None):
+def muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6=None, labels_v=None):
     """
     多尺度BCE损失融合函数
-    支持原始U2NET(7个输出)和新的U2NET_GRAIN(5个输出)
+    支持原始U2NET(7个输出d0-d6)和U2NET_GRAIN(6个输出d0-d5)
     """
     loss0 = bce_loss(d0, labels_v)
     loss1 = bce_loss(d1, labels_v)
     loss2 = bce_loss(d2, labels_v)
     loss3 = bce_loss(d3, labels_v)
     loss4 = bce_loss(d4, labels_v)
+    loss5 = bce_loss(d5, labels_v)
     
-    if d5 is not None and d6 is not None:
-        # 原始U2NET的7个输出
-        loss5 = bce_loss(d5, labels_v)
+    if d6 is not None:
+        # 原始U2NET的7个输出 (d0-d6)
         loss6 = bce_loss(d6, labels_v)
         loss = loss0 + loss1 + loss2 + loss3 + loss4 + loss5 + loss6
         print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f, l6: %3f"%(
             loss0.data.item(), loss1.data.item(), loss2.data.item(), 
             loss3.data.item(), loss4.data.item(), loss5.data.item(), loss6.data.item()))
     else:
-        # 新的U2NET_GRAIN的5个输出
-        loss = loss0 + loss1 + loss2 + loss3 + loss4
-        print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f"%(
+        # U2NET_GRAIN模型的6个输出 (d0-d5)
+        loss = loss0 + loss1 + loss2 + loss3 + loss4 + loss5
+        print("l0: %3f, l1: %3f, l2: %3f, l3: %3f, l4: %3f, l5: %3f"%(
             loss0.data.item(), loss1.data.item(), loss2.data.item(), 
-            loss3.data.item(), loss4.data.item()))
+            loss3.data.item(), loss4.data.item(), loss5.data.item()))
 
     return loss0, loss
 
@@ -86,7 +86,7 @@ model_dir = os.path.join(os.getcwd(), 'saved_models', model_name + os.sep)
 print(f"Model directory: {model_dir}")
 
 # 添加预训练模型路径
-pretrained_model_path = ""
+pretrained_model_path = "saved_models/u2net_grain/u2net_grain_best_acc_0.8933_epoch_4.pth"
 # 从预训练模型文件名中提取起始epoch
 start_epoch = 0  # 从文件名中提取的epoch数
 print(f"Pretrained model: {pretrained_model_path}")
@@ -226,9 +226,9 @@ def train_model():
                 d0, d1, d2, d3, d4, d5, d6 = outputs
                 loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, d6, labels_v)
             else:
-                # 新的U2NET_GRAIN模型有5个输出
-                d0, d1, d2, d3, d4 = outputs
-                loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, labels_v=labels_v)
+                # U2NET_GRAIN模型有6个输出 (d0-d5)
+                d0, d1, d2, d3, d4, d5 = outputs
+                loss2, loss = muti_bce_loss_fusion(d0, d1, d2, d3, d4, d5, labels_v=labels_v)
             
             # 计算当前batch的准确率（使用d0作为最终输出）
             batch_accuracy = calculate_accuracy(outputs[0], labels_v)
@@ -250,7 +250,7 @@ def train_model():
             if model_name in ['u2net', 'u2netp']:
                 del d0, d1, d2, d3, d4, d5, d6, loss2, loss
             else:
-                del d0, d1, d2, d3, d4, loss2, loss
+                del d0, d1, d2, d3, d4, d5, loss2, loss
 
             print("[epoch: %3d/%3d, batch: %5d/%5d, ite: %d] train loss: %3f, tar: %3f, accuracy: %3f \n" % (
             epoch + 1, epoch_num, (i + 1) * batch_size_train, train_num, ite_num, 

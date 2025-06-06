@@ -14,7 +14,7 @@ from model import U2NETP_GRAIN
 from data_loader import RescaleT
 from data_loader import ToTensorLab
 
-pred_size = 512
+pred_size = 2048
 
 def normPRED(d):
     ma = torch.max(d)
@@ -117,11 +117,11 @@ def inference_folder(image_dir, model_path, output_dir, model_type='u2net'):
                     # 清理内存
                     del d1, d2, d3, d4, d5, d6, d7
                 else:
-                    # U2NET_GRAIN模型有5个输出
-                    d1, d2, d3, d4, d5 = outputs
+                    # U2NET_GRAIN模型有6个输出 (d0-d5)
+                    d1, d2, d3, d4, d5, d6 = outputs
                     pred = d1[:,0,:,:]
                     # 清理内存
-                    del d1, d2, d3, d4, d5
+                    del d1, d2, d3, d4, d5, d6
                 
                 pred = normPRED(pred)
 
@@ -209,10 +209,10 @@ def inference_single_image(image_path, model_path, output_path, model_type='u2ne
             pred = d1[:,0,:,:]
             del d1, d2, d3, d4, d5, d6, d7
         else:
-            # U2NET_GRAIN模型有5个输出
-            d1, d2, d3, d4, d5 = outputs
+            # U2NET_GRAIN模型有6个输出 (d0-d5)
+            d1, d2, d3, d4, d5, d6 = outputs
             pred = d1[:,0,:,:]
-            del d1, d2, d3, d4, d5
+            del d1, d2, d3, d4, d5, d6
         
         pred = normPRED(pred)
 
@@ -233,9 +233,10 @@ def inference_single_image(image_path, model_path, output_path, model_type='u2ne
 if __name__ == "__main__":
     # 示例使用
     model_type = 'u2net_grain'  # 可选: 'u2net', 'u2netp', 'u2net_grain', 'u2netp_grain'
-    image_dir = '/Volumes/data1/JH/projects/JLD_imgprocess/dataset/img/'
-    model_path = 'saved_models/u2net_grain/u2net_grain_best_acc_0.9119_epoch_56.pth'
-    output_dir = 'test_results_new_56/'
+    image_dir = '/Volumes/data1/JH/projects/JLD/JLD_quyang/0530/85-40CrXL2/info.imgs/'
+    # image_dir = '/Volumes/data1/JH/projects/JLD/U-2-Net_JLD/test_data/test/'
+    model_path = 'saved_models/u2net_grain_co/u2net_grain_best_acc_0.9309_epoch_191.pth'
+    output_dir = 'test_results_191/'
     
     # 示例使用
     # model_type = 'u2net'  # 可选: 'u2net', 'u2netp', 'u2net_grain', 'u2netp_grain'
